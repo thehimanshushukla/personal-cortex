@@ -1,18 +1,29 @@
-# claude-code-starter
+# A working setup for coding agents
 
-Templates and working guardrails for [Claude Code](https://code.claude.com/docs), organised by **the failure each one prevents**.
+A record that outlives the conversation, an instruction file that stays short, and guardrails that actually refuse. Organised by **the failure each piece prevents**, with three stages: the record, a minimal guard, the full hook set.
+
+Written for [Claude Code](https://code.claude.com/docs) and built to travel. The record is plain markdown in git and works with any agent that can open a file. The instruction file is `AGENTS.md`, which Codex, Cursor and Gemini CLI read natively and Claude Code imports with one line. The hooks use the shape Claude Code, Codex and Cursor now share: a JSON description on stdin, exit code 2 to block, the reason on stderr. Event names and input fields differ per agent, so a hook ports with edits, not unchanged; the tests tell you when an edit broke it.
 
 Nothing here is a copy of my configuration. The files are structure plus guidance on what goes in them, because the decisions are the transferable part and my project names are not.
 
-Two profiles:
+Three stages:
 
-| | `minimal/` | `full/` |
-|---|---|---|
-| For | You have never written a hook | You run Claude Code daily, often more than one session at a time |
-| Contents | One instruction file, one guard, one settings file | The full hook set, session tracking, a write ledger |
-| Time to working | About 10 minutes | About an hour |
+| | `record/` | `minimal/` | `full/` |
+|---|---|---|---|
+| For | Anyone, with any agent | You have never written a hook | You run an agent daily, often more than one session at a time |
+| Contents | An instruction template, a decision record, a session page and a checkpoint template | One instruction file, one guard, one settings file | The full hook set, session tracking, a write ledger |
+| Time to working | Ten minutes | About ten minutes | About an hour |
 
-Start with `minimal/`. Move to `full/` when you hit one of the failures below and want it to stop happening.
+Start with `record/`. Add `minimal/` when a rule you wrote down gets broken anyway. Move to `full/` when you hit one of the failures below and want it to stop happening. `examples/` holds the small pieces the articles walk through: a skill, a bounded hook with its registration, a review-eligibility check, and their tests.
+
+---
+
+## Stage 1: the record (any agent)
+
+1. Copy `record/AGENTS.template.md` to your project's `AGENTS.md`, merging any existing instructions. If you use Claude Code, make `./CLAUDE.md` a single line: `@AGENTS.md`.
+2. Copy `record/decisions.md` to `docs/decisions.md`. Replace the illustrative entry with a real decision, with the reason and the alternative you rejected.
+3. Open a fresh session and ask what remains and why. Check its answer against the record. If it misses the reason, improve the record or its entry point.
+4. When one file stops being enough, use `record/session.template.md` for a page per substantial session and `record/checkpoint.template.md` for the running note that survives a compaction.
 
 ---
 
@@ -32,7 +43,7 @@ Each row is a real failure mode. Read the ones you recognise; skip the rest.
 
 ---
 
-## Install (minimal)
+## Stage 2: install the minimal guard (Claude Code)
 
 ```bash
 git clone https://github.com/<you>/claude-code-starter
@@ -79,7 +90,8 @@ A guard you have only ever seen allow things is a guard you have not tested.
 ## Tests
 
 ```bash
-python3 -m pytest tests -q
+python3 -m pytest tests -q            # the guards
+python3 -m unittest -v examples/test_examples.py   # the article examples
 ```
 
 The guards are tested for both the block and the allow case, and for the bug that is easy to write: a `Stop` hook with no attempt counter is an infinite loop.
@@ -100,6 +112,6 @@ If something here broke in your setup, please open an issue. What people trip ov
 
 ---
 
-Written by [Himanshu Shukla](https://thehimanshushukla.com). The reasoning behind each piece is in the [Claude Code setup series](https://thehimanshushukla.com/blog).
+Written by [Himanshu Shukla](https://thehimanshushukla.com). The reasoning behind each piece is in the [Claude Code setup series](https://thehimanshushukla.com/blog/claude-code-setup-series).
 
 MIT licensed. Use it however you like.
