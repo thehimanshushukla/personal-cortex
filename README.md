@@ -9,6 +9,8 @@
   <img src="https://img.shields.io/badge/Codex%20%C2%B7%20Cursor%20%C2%B7%20Gemini%20CLI-record%20and%20AGENTS.md-0f1a2e" alt="other agents">
 </p>
 
+# personal-cortex
+
 **A working setup for coding agents.** A record that outlives the conversation, an instruction file that stays short, and guardrails that actually refuse. Organised by the failure each piece prevents, in three stages you can adopt one at a time.
 
 ## What a session sees before you type a word
@@ -83,7 +85,7 @@ The full test for what belongs in the instruction file is in [WHAT-GOES-WHERE.md
 | One session commits another session's work | You run two terminals. A directory-level `git add` sweeps up whatever the other one was mid-way through writing. | `stage-guard.py` |
 | An agent writes somewhere it should not | A path under `~/.ssh`, `~/.aws`, or a destructive shell command. | `full/scripts/danger-guard.py` |
 | You finish a long session and write nothing down | The sessions most worth recording are the ones where you are most tired. | The `Stop` gate in `full/scripts/session-tracking/on-stop.sh` |
-| Compaction eats the reasoning | The conversation is summarised and the *why* behind today's decisions is gone. | `record/checkpoint.template.md` and `on-pre-compact.sh`, which writes to disk before the summary |
+| Compaction drops the reasoning | The conversation is summarised and the *why* behind today's decisions is gone. | `record/checkpoint.template.md`, kept up to date as you work, and `on-pre-compact.sh`, which marks the boundary in it before the summary runs |
 | You cannot tell which files a session touched | You want to stage precisely and cannot reconstruct what changed. | `on-post-write.py`, a per-session write ledger |
 
 ## Stage 1: the record (any agent)
@@ -101,8 +103,9 @@ That fresh-session test is the only measurement you need at this stage. Run it b
 git clone https://github.com/thehimanshushukla/personal-cortex
 cd personal-cortex
 
-# 1. instruction file - open it and fill the placeholders
-cp minimal/CLAUDE.md ~/.claude/CLAUDE.md
+# 1. instruction file - open it, fill the placeholders, then merge it into
+#    ~/.claude/CLAUDE.md (if you already have one, do not overwrite it)
+cat minimal/CLAUDE.md
 
 # 2. the guard
 mkdir -p ~/.claude/scripts
@@ -125,7 +128,7 @@ A guard you have only ever seen allow things is a guard you have not tested.
 
 ## Stage 3: the full hook set
 
-`full/` adds the danger guard, the session-start card, the pre-compaction marker, the Stop gate and the write ledger, wired in `full/settings.json`. Each script declares its fail-open or fail-closed choice in its docstring and has a kill switch. Read the docstrings before copying; adapt the paths.
+`full/` adds the danger guard, the session-start card, the pre-compaction marker, the Stop gate and the write ledger, wired in `full/settings.json`. The session-start hook prints whatever you put in `~/.claude/context-card.txt`; generating that card from your record is yours to build, and the three headings that earn their space are Active, Settled and Avoid. Each guard declares its fail-open or fail-closed choice in its docstring and has a kill switch. Read the docstrings before copying; adapt the paths.
 
 ## Portability, honestly
 
@@ -142,7 +145,7 @@ A guard you have only ever seen allow things is a guard you have not tested.
 
 **Exit 0 when it is not your business.** A hook on every Bash call must be cheap and quiet or you will disable it within a week.
 
-**Give it a kill switch.** Each script honours an environment variable that turns it off for one shell.
+**Give it a kill switch.** Each guard honours an environment variable that turns it off for one shell.
 
 **Expect a false positive.** When one arrives, check the caller before the rule. A new guard collides first with your own older procedures. If it was a real false positive, prefer changing the workflow that collided over loosening the pattern.
 
