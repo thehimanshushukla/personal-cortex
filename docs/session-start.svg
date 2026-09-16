@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="540" viewBox="0 0 1100 540" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="15">
+<style>
+.l{opacity:0;animation:show .01s linear forwards}
+@keyframes show{to{opacity:1}}
+.c{animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+</style>
+<rect width="1100" height="540" rx="14" fill="#0f1a2e"/>
+<circle cx="24" cy="22" r="6" fill="#ff5f57"/><circle cx="44" cy="22" r="6" fill="#febc2e"/><circle cx="64" cy="22" r="6" fill="#28c840"/>
+<text x="90" y="27" fill="#6b7590" font-size="13">a fresh session, before you type a word</text>
+<text xml:space="preserve" class="l" style="animation-delay:0.60s" x="28" y="68" fill="#f1ede4">$ claude</text>
+<text xml:space="preserve" class="l" style="animation-delay:1.37s" x="28" y="120" fill="#f1ede4">▶ crosstalk   (last active 2026-09-07)</text>
+<text xml:space="preserve" class="l" style="animation-delay:1.59s" x="28" y="146" fill="#9aa3b5">  Personal venture: agents watch each other&#x27;s live token streams and interrupt</text>
+<text xml:space="preserve" class="l" style="animation-delay:1.81s" x="28" y="172" fill="#9aa3b5">  mid-generation via a graduated ladder. Gap verified Aug 2026 - exists nowhere…</text>
+<text xml:space="preserve" class="l" style="animation-delay:2.03s" x="28" y="198" fill="#3b4660">  ─────────────────────────────────────────────</text>
+<text xml:space="preserve" class="l" style="animation-delay:2.25s" x="28" y="224" fill="#7cc4ff">  Active:  ⟳ 60-90s baseline-vs-crosstalk collision demo (2-3d, after…</text>
+<text xml:space="preserve" class="l" style="animation-delay:2.47s" x="28" y="250" fill="#7cc4ff">           ⟳ Benchmark v2 (pre-registered): arm D next-boundary…</text>
+<text xml:space="preserve" class="l" style="animation-delay:2.69s" x="28" y="276" fill="#7cc4ff">           ⟳ Benchmark v2 rewrite (methodology audit + fleet-conflict…</text>
+<text xml:space="preserve" class="l" style="animation-delay:2.91s" x="28" y="302" fill="#f1ede4">  Settled: • Splitting chunking from judging behind a per-lane queue let SEGMENT_END reach the…</text>
+<text xml:space="preserve" class="l" style="animation-delay:3.13s" x="28" y="328" fill="#e8a07a">  Avoid:   ⚠ Gotcha: an interrupt issued while the producer is paced has no live…</text>
+<text xml:space="preserve" class="l" style="animation-delay:3.57s" x="28" y="380" fill="#9aa3b5">  L1: the card above + conversation + the recent index</text>
+<text xml:space="preserve" class="l" style="animation-delay:3.79s" x="28" y="406" fill="#9aa3b5">  L2: search the source pages</text>
+<text xml:space="preserve" class="l" style="animation-delay:4.01s" x="28" y="432" fill="#9aa3b5">  L3: open the one page the search found</text>
+<text xml:space="preserve" class="l c" style="animation-delay:4.45s" x="28" y="484" fill="#f1ede4">&gt; _</text>
+</svg>

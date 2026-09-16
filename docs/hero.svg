@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="470" viewBox="0 0 1200 470" font-family="-apple-system, Segoe UI, Inter, Helvetica, Arial, sans-serif">
+<rect width="1200" height="470" rx="18" fill="#0f1a2e"/>
+<text x="48" y="64" fill="#f1ede4" font-size="34" font-weight="700">personal-cortex</text>
+<text x="48" y="96" fill="#9aa3b5" font-size="17">A working setup for coding agents. Six layers, one record, and a card every session receives before it starts.</text>
+<rect x="48" y="140" width="168" height="74" rx="10" fill="#16243d" stroke="#2c3b58"/>
+<text x="62" y="170" fill="#f1ede4" font-size="16" font-weight="600">Instruction file</text>
+<text x="62" y="194" fill="#9aa3b5" font-size="12">what always holds</text>
+<path d="M132.0 214 C132.0 254 600 234 600 284" stroke="#c9694a" stroke-width="2" fill="none" opacity="0.9"/>
+<rect x="230" y="140" width="168" height="74" rx="10" fill="#16243d" stroke="#2c3b58"/>
+<text x="244" y="170" fill="#f1ede4" font-size="16" font-weight="600">Record</text>
+<text x="244" y="194" fill="#9aa3b5" font-size="12">what happened, and why</text>
+<path d="M314.0 214 C314.0 254 600 234 600 284" stroke="#c9694a" stroke-width="2" fill="none" opacity="0.9"/>
+<rect x="412" y="140" width="168" height="74" rx="10" fill="#16243d" stroke="#2c3b58"/>
+<text x="426" y="170" fill="#f1ede4" font-size="16" font-weight="600">Hooks</text>
+<text x="426" y="194" fill="#9aa3b5" font-size="12">what must never happen</text>
+<path d="M496.0 214 C496.0 254 600 234 600 284" stroke="#c9694a" stroke-width="2" fill="none" opacity="0.9"/>
+<rect x="594" y="140" width="168" height="74" rx="10" fill="#16243d" stroke="#2c3b58"/>
+<text x="608" y="170" fill="#f1ede4" font-size="16" font-weight="600">Skills</text>
+<text x="608" y="194" fill="#9aa3b5" font-size="12">procedures that fire themselves</text>
+<path d="M678.0 214 C678.0 254 600 234 600 284" stroke="#c9694a" stroke-width="2" fill="none" opacity="0.9"/>
+<rect x="776" y="140" width="168" height="74" rx="10" fill="#16243d" stroke="#2c3b58"/>
+<text x="790" y="170" fill="#f1ede4" font-size="16" font-weight="600">MCP</text>
+<text x="790" y="194" fill="#9aa3b5" font-size="12">access you own</text>
+<path d="M860.0 214 C860.0 254 600 234 600 284" stroke="#c9694a" stroke-width="2" fill="none" opacity="0.9"/>
+<rect x="958" y="140" width="168" height="74" rx="10" fill="#16243d" stroke="#2c3b58"/>
+<text x="972" y="170" fill="#f1ede4" font-size="16" font-weight="600">Agents</text>
+<text x="972" y="194" fill="#9aa3b5" font-size="12">bounded workers</text>
+<path d="M1042.0 214 C1042.0 254 600 234 600 284" stroke="#c9694a" stroke-width="2" fill="none" opacity="0.9"/>
+<rect x="440" y="284" width="320" height="56" rx="10" fill="#c9694a"/>
+<text x="600" y="319" fill="#0f1a2e" font-size="17" font-weight="700" text-anchor="middle">one record, plain files, in git</text>
+<path d="M600 340 L600 370" stroke="#c9694a" stroke-width="2"/>
+<rect x="300" y="370" width="600" height="72" rx="10" fill="#16243d" stroke="#2c3b58"/>
+<text x="320" y="398" fill="#f1ede4" font-size="14" font-family="ui-monospace, Menlo, monospace">▶ project   (last active 3 days ago)</text>
+<text x="320" y="422" fill="#7cc4ff" font-size="14" font-family="ui-monospace, Menlo, monospace">  Active: ⟳ …   Settled: • …   Avoid: ⚠ …</text>
+</svg>
