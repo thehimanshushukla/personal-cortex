@@ -1,7 +1,6 @@
 # personal-cortex
 
-**A working setup for coding agents.** 
-A record that outlives the conversation, an instruction file that stays short, and guardrails that actually refuse. Organised by **the failure each piece prevents**, with three stages: the record, a minimal guard, the full hook set.
+**A working setup for coding agents.** A record that outlives the conversation, an instruction file that stays short, and guardrails that actually refuse. Organised by **the failure each piece prevents**, with three stages: the record, a minimal guard, the full hook set.
 
 Written for [Claude Code](https://code.claude.com/docs) and built to travel. The record is plain markdown in git and works with any agent that can open a file. The instruction file is `AGENTS.md`, which Codex, Cursor and Gemini CLI read natively and Claude Code imports with one line. The hooks use the shape Claude Code, Codex and Cursor now share: a JSON description on stdin, exit code 2 to block, the reason on stderr. Event names and input fields differ per agent, so a hook ports with edits, not unchanged; the tests tell you when an edit broke it.
 
