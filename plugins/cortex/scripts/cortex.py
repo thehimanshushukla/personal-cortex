@@ -645,6 +645,9 @@ def cmd_install_backup(args) -> int:
     plist = HOME / "Library" / "LaunchAgents" / "com.cortex.backup.plist"
     plist.parent.mkdir(parents=True, exist_ok=True)
     plist.write_text(PLIST.format(script=stable, vault=vault, home=HOME))
+    if os.environ.get("CORTEX_NO_LAUNCHD"):
+        print("Weekly backup file written (test mode: not switched on).")
+        return 0
     uid = os.getuid()
     subprocess.run(["launchctl", "bootout", f"gui/{uid}", str(plist)], capture_output=True)
     r = subprocess.run(["launchctl", "bootstrap", f"gui/{uid}", str(plist)], capture_output=True, text=True)
