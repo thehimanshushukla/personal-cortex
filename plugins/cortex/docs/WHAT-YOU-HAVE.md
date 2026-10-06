@@ -45,6 +45,8 @@ Say these in your own words. Exact phrases are not needed.
 | "open the sorting desk" | Shows the proposals. Say "accept all", "accept all except 3", or "move 4 to ...". Nothing is filed until you confirm. | You stay in control of where everything goes. | Automatic filing gets some things wrong. You decide, the cortex does the work. |
 | "what should I automate" | Reads how you have worked and proposes up to 5 improvements, each with the dates it saw the pattern: a new skill, an automatic action, a scheduled job, a standing rule or a template. Answer Yes, Not now or Never. | The cortex learns your way of working. This becomes useful after a week or two of use. | The skills above were found by reading months of sessions for repeated work. Suggest does that reading for you, continuously. |
 | (after a Yes) | Builds what you approved. A new skill starts on a 30-day trial and is retired if unused. | Only improvements you use stay. | An audit found 194 skills installed and only 5 written for real work. Unused skills pile up unless something retires them. |
+| "what skills can I add" | Shows a short vetted list of add-ons (Anthropic's document skills, skill creator, productivity and role plugins), with who makes each and its license. | Grow the cortex safely. | Add-ons can run code on your Mac, so only known publishers are listed, and nothing installs without your yes. |
+| "check my CLAUDE.md" | Reviews your instruction file: too long, history mixed in, rules that keep being broken, procedures that should be skills. Changes only with your yes. | Instructions stay short enough to be followed. | Instruction files that grow after every bad result stop being followed once they pass a couple of hundred lines. |
 | "how does my cortex work" | Explains any part, using your own pages. | Learn as you go. | A system you do not understand is a system you stop using. |
 | "back up my cortex" | Saves and pushes to GitHub now. | Peace of mind. | See the weekly backup above. |
 | "update my cortex" | Moves you to a newer version without touching your pages. | New features, nothing lost. | Copies of a kit that cannot be updated go stale on every machine. |
@@ -57,7 +59,11 @@ Say these in your own words. Exact phrases are not needed.
 - Every Sunday at 18:00 a weekly backup saves anything left over. If the Mac was asleep, it runs at your next session.
 - Your pages are plain files you own. They work without this plugin, and you can read them on GitHub from anywhere.
 
-## 5. Help, feedback and what's next
+## 5. Learn more
+
+The thinking behind every piece is written up in the maker's Claude Code series: [thehimanshushukla.com/blog/claude-code-setup-series](https://thehimanshushukla.com/blog/claude-code-setup-series?utm_source=cortex). The guide links the right article when a question goes deeper.
+
+## 6. Help, feedback and what's next
 
 - **Feedback or ideas:** say "send feedback". You see exactly what is sent before it goes.
 - **Problems:** say "something is broken". It runs a health check and includes the result in the report.

@@ -58,6 +58,7 @@ The full list of what runs on its own, what you can ask for, and why each exists
 ## What's coming next
 
 The Cortex plugin is at an early version and grows from what its users ask for. Next up:
+- a reviewer agent: a second opinion on important documents before they go out
 - a task board and morning brief
 - an email and calendar sweep that proposes follow-ups for your approval
 - email drafts in your own voice

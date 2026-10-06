@@ -30,6 +30,9 @@ Treat "prep me for Alex", "brief me before the Alex call" and "what do I know ab
 | A task on a rhythm: weekly, monthly, "before every call", "every Friday" | 3+ occurrences | **Scheduled job** |
 | The same page shape rebuilt by hand (the same headings again and again) | 3+ | **Template** |
 | A trial skill past its `trial_until` with no use seen | - | **Retire** it |
+| A need that a vetted add-on in `${CLAUDE_PLUGIN_ROOT}/docs/CATALOG.md` already covers, matching its "propose when" signal | as the entry says | **Install from the catalog** (say who makes it and its license) |
+| The same rule is written in CLAUDE.md but was broken 2+ times anyway | 2+ | **Automatic action** (a hook): a rule written down but still broken needs enforcing |
+| CLAUDE.md has grown past about 150 lines, or holds history instead of instructions | - | **Tidy CLAUDE.md** (hand to the guide's "check my CLAUDE.md") |
 
 Rules for the evidence:
 - **Only real items.** Every proposal must cite real, dated items from the history or session pages. If you cannot point to the dates, drop the proposal.
@@ -74,6 +77,8 @@ For each proposal the person answers, append one JSON line to `_cortex/suggest-l
 ## 5. On Yes
 
 Hand over to the build-skill skill, with the proposal, its type, its evidence and the person's own wording. Do not build anything here.
+
+For a **catalog** item, there is nothing to build. Show the install steps exactly as `CATALOG.md` gives them. In the desktop app that is Code tab > Plugins > Add marketplace, then install. Say once more who makes it and its license. Only add the marketplace and install it if they say yes, then record the answer as usual.
 
 ## 6. Teaching note
 
