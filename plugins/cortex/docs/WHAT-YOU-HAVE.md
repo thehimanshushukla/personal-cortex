@@ -17,14 +17,17 @@ The one fact sheet about this plugin. Setup reads it to give the tour at the end
 
 You never start these. Claude Code runs them at fixed moments.
 
-| When | What it does | Why it helps you |
-|---|---|---|
-| A session starts | Shows your start card: what is active, your latest decisions and lessons, follow-ups due this week, imports waiting, last backup. If the weekly backup was missed because the Mac was asleep, it runs it now. | Every session starts where the last one left off. You never re-explain your work. |
-| You send a message | Watches how long the chat is getting. It says so once at about 60% full and once at about 80% full. | Long chats get worse answers and lose detail. You get told in time to log and start fresh. |
-| Before a long chat is compressed | Marks that a summary happened, so the log knows to check nothing was lost. | Decisions made early in a long chat still get recorded. |
-| Claude finishes a reply | If this chat changed your cortex, or ran 10 minutes or more, and has not been logged, it asks once: "Want me to log this session?" Say "log it" or "skip". It asks at most twice. | Work is not lost when you close the window. |
-| Before a command runs or a file is written | Refuses commands that could do damage:<br>- deleting your home or cortex folder<br>- force-pushing over your backup<br>- running scripts straight from the internet<br>- writing into password and key folders<br>It also stops one chat from saving another chat's half-finished pages. | Mistakes that cannot be undone are blocked before they happen. |
-| After a file is written | Notes which cortex files this chat wrote. | Logging and backup save exactly this chat's work. |
+| When | What it does | Why it helps you | Why it exists (what went wrong first) |
+|---|---|---|---|
+| A session starts | Shows your start card: what is active, latest decisions and lessons, follow-ups due this week, imports waiting, last backup. Runs a missed weekly backup. | Every session starts where the last one left off. You never re-explain your work. | Every new chat started from zero, and the first ten minutes went on re-explaining the project. |
+| You send a message | Says once at about 60% full and once at about 80% full that the chat is getting long. | You log and start fresh before answers get worse. | Very long chats gave weaker answers and cost the most: in one audit, 72% of the spend came from turns with very long chats. |
+| Before a long chat is compressed | Marks that a summary happened, so logging knows to check nothing was lost. | Decisions made early in a long chat still get recorded. | When a long chat was summarised, early decisions and their reasons quietly disappeared. |
+| Claude finishes a reply | If this chat changed your cortex or ran 10+ minutes and is not logged, asks once: "Want me to log this session?" (at most twice). | Work is not lost when you close the window. | In a hurry, sessions got closed without notes, and the reasoning behind decisions was gone the next week. A written rule to log was not enough; a reminder at the moment of closing was. |
+| Before a command or file write | Refuses deleting your home or cortex folder, force-pushing over your backup, running scripts straight from the internet, writing into password folders, and one chat saving another chat's half-done pages. | Mistakes that cannot be undone are blocked first. | With several chats open at once, one chat's "save everything" swept up another chat's unfinished work, three times in one day. |
+| After a file is written | Notes which cortex files this chat wrote. | Logging and backup save exactly this chat's work. | Same day as above: the fix for "save everything" was knowing precisely which files each chat wrote. |
+| Every Sunday 18:00 (and next start if missed) | Saves and pushes everything to your private GitHub. | A lost or broken Mac costs nothing. | Work piled up for six days with nearly 200 changes not backed up anywhere. |
+
+The short version: each of these hooks exists because something went wrong first in a year of daily use. They are written down so it does not happen to you.
 
 ## 3. What you can ask for (skills)
 
