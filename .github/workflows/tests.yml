@@ -7,7 +7,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: '3.12' }
-      - run: pip install pytest
+      - run: pip install pytest==8.3.5
       - run: python3 -m pytest tests -q
       - run: cd examples && python3 -m unittest -q test_examples.py
       - run: python3 -m pytest plugins/cortex/tests -q

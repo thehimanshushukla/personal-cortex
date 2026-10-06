@@ -74,6 +74,31 @@ After that, the highlights:
 
 The full list is in [ROADMAP.md](plugins/cortex/docs/ROADMAP.md). Inside Cortex, say "what's coming next" to see it, or "send feedback" to tell us what you want first.
 
+## What Cortex touches, sends and runs
+
+Plain answers for you and for your IT team, before any scanner has to guess.
+
+- **Files it writes:**
+  - your cortex folder (default `~/cortex`)
+  - `~/.cortex/` (a pointer file and per-session notes)
+  - one weekly-backup schedule file in `~/Library/LaunchAgents/`
+  - with your yes only, one Claude setting (`cleanupPeriodDays`, how long chat history is kept)
+- **What it never touches:**
+  - your password and key folders (`~/.ssh`, `~/.aws`, `~/.gnupg`, the Keychain): the safety guard names these only to **block** writes to them
+  - your other Claude settings
+- **What leaves your Mac:**
+  - your cortex pages, pushed to **your own private** GitHub repository
+  - feedback, only when you say "send feedback", see the exact text, and say yes; it goes to the maker's Google Form
+
+  Nothing else. There is no tracking and no analytics.
+- **What runs on its own:**
+  - the hooks listed in the plugin's fact sheet, at session start and end and before commands
+  - the Sunday 18:00 backup
+
+  Scheduled jobs that Suggest proposes are installed only after your yes.
+- **What it installs:** nothing beyond itself. It uses the `git` and `python3` that come with Apple's Command Line Tools, and the Python standard library only.
+- **The code** is all in [plugins/cortex](plugins/cortex): one engine script, one hooks script, and plain-text skills. 35 tests run on every change.
+
 ## Three stages
 
 | | `record/` | `minimal/` | `full/` |

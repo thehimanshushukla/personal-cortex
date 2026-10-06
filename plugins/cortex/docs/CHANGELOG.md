@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.2.2
+Setup asks before changing the chat-history setting; README section "What Cortex touches, sends and runs"; test dependency pinned.
+
 ## 0.2.0
 Vetted skills and plugins catalog (Suggest proposes from it on evidence), "check my CLAUDE.md", learn-more links to the Claude Code series, feedback form, why-it-exists throughout, Apache 2.0.
 
