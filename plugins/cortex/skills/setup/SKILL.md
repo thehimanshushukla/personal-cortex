@@ -72,6 +72,8 @@ If the path is inside iCloud Drive, Desktop/Documents with iCloud sync on, OneDr
 
 Ask: "Back it up to a private GitHub repository?" (recommended yes). Explain: "Every time you log, your pages are saved to a private copy on GitHub that only you can see. A weekly backup also runs every Sunday evening, in case anything was left behind."
 
+If yes, ask what to call the repository, with a suggestion they can accept: "What should the repository be called? Suggestion: `cortex` (only you will see it). Say 'ok' or type another name." Use exactly the name they give (lowercase, hyphens for spaces). Never pick the name yourself. Below, `<repo>` is that name.
+
 ## Step 5 - Show the full plan and wait for yes
 
 Print the full tree with their real names, for example:
@@ -98,8 +100,8 @@ Say: "Collection folders start empty. Each project or center gets its own folder
 4. **Pointer file:** write `~/.cortex/config.json` as `{"vault": "<absolute path>", "kit_version": "<version from kit.yaml>"}`.
 5. **Git:** `git init` in the vault, set branch `main`, first commit of the files you created (by name, not `git add .`).
 6. **Private GitHub repo (if yes):**
-   - If `gh auth status` succeeds: `gh repo create <name>-cortex --private --source <vault> --remote origin --push`.
-   - Otherwise walk them through it: open https://github.com/new, name `<name>-cortex`, choose **Private**, do not add a README, click Create; they paste the URL; you run `git remote add origin <url>` and `git push -u origin main`. If the push asks for sign-in, explain the browser prompt.
+   - If `gh auth status` succeeds: `gh repo create <repo> --private --source <vault> --remote origin --push`.
+   - Otherwise walk them through it: open https://github.com/new, name it `<repo>`, choose **Private**, do not add a README, click Create; they paste the URL; you run `git remote add origin <url>` and `git push -u origin main`. If the push asks for sign-in, explain the browser prompt.
    - Never create a public repository. Double-check with `gh repo view --json visibility` when gh is available.
 7. **Weekly backup:** `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/cortex.py install-backup`.
 8. **Keep chat history longer:** read `~/.claude/settings.json` (treat missing as `{}`), set `"cleanupPeriodDays": 365` and keep every other key as it was, write it back, then show them the before/after line. Explain: "Claude normally deletes your chat history after 30 days. Suggest needs it to spot what you repeat, so I kept it for a year. It stays on this Mac."
