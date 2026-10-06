@@ -29,6 +29,32 @@ Every session starts from zero. Rules get written and ignored. Procedures get fo
 
 Each piece here is the fix for one of those failures, taken from a setup that has run for about a year across client programs and my own products. The reasoning behind every piece is in the [Claude Code setup series](https://thehimanshushukla.com/blog/claude-code-setup-series); the files here are the transferable part.
 
+## The Cortex plugin: the same system, set up for you
+
+If you do not want to copy files by hand, install the plugin. It works in the Claude desktop app's Code tab or in Claude Code, on a Mac.
+
+```
+claude plugin marketplace add thehimanshushukla/personal-cortex
+claude plugin install cortex@personal-cortex
+```
+
+Then say **"set up my cortex"**. A guided setup asks how you want your world organised (personal, work, each organisation you work with), explains each level as it goes, and builds an empty cortex in exactly that shape, backed up to your own private GitHub. Nothing is loaded that you did not choose. When it finishes, it walks you through everything you now have.
+
+**Every piece exists because something went wrong first.** From a year of daily use:
+
+| Piece | What went wrong before it existed |
+|---|---|
+| The start card | Every new chat started from zero; the first ten minutes went on re-explaining the project. |
+| The log reminder at the end of a session | In a hurry, sessions got closed without notes, and the reasoning behind decisions was gone a week later. A written rule to log was not enough. |
+| Decisions and lessons as their own pages | In one nine-day stretch, 44 decisions, problems and lessons were recorded only inside session notes, where nobody would find them. |
+| The chat-length warning | Very long chats gave weaker answers and cost the most: in one audit, 72% of the spend came from turns with very long chats. |
+| The multi-chat guard | With several chats open, one chat's "save everything" swept up another chat's unfinished work, three times in one day. |
+| The weekly backup | Work piled up for six days, with nearly 200 changes not backed up anywhere. |
+| Meeting debrief | Turning a meeting into actions by hand was repeated in more than 15 sessions before it became a skill. |
+| Suggest (what should I automate) | Every skill in this kit was found by reading months of sessions for repeated work. Suggest does that reading for you, and proposes; it never installs anything on its own. |
+
+The full list of what runs on its own, what you can ask for, and why each exists is in [plugins/cortex/docs/WHAT-YOU-HAVE.md](plugins/cortex/docs/WHAT-YOU-HAVE.md). Feedback and requests: say "send feedback" inside Cortex, or write to info@thehimanshushukla.com.
+
 ## Three stages
 
 | | `record/` | `minimal/` | `full/` |

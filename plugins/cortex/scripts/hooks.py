@@ -92,11 +92,11 @@ def prompt(p: dict) -> int:
         (sd / "warned_80").touch()
         (sd / "warned_60").touch()
         emit_context("UserPromptSubmit", "Cortex: this chat is about 80% full. Before answering, tell the person in one "
-                     "line: \"This chat is nearly full - say 'log this' now so nothing is lost, then start a fresh chat.\"")
+                     "line: \"This chat is nearly full - long chats start to lose detail. Say 'log this' now so nothing is lost, then start a fresh chat.\"")
     elif frac >= 0.6 and not (sd / "warned_60").exists():
         (sd / "warned_60").touch()
         emit_context("UserPromptSubmit", "Cortex: this chat is about 60% full. At a natural pause, mention once in one "
-                     "line that logging and starting a fresh chat soon keeps answers sharp.")
+                     "line that long chats start to lose detail, so logging and starting a fresh chat soon keeps answers sharp.")
     return 0
 
 
@@ -133,7 +133,7 @@ def stop(p: dict) -> int:
     (sd / "stop_attempts").write_text(str(attempts + 1))
     sid = p.get("session_id", "")
     print("This session has not been logged in the cortex yet. Ask the person in one short line: "
-          "\"Want me to log this session? Say 'log it' or 'skip'.\" If they say skip, run: "
+          "\"Want me to log this session, so the reasons behind today's decisions are not lost? Say 'log it' or 'skip'.\" If they say skip, run: "
           f"touch ~/.cortex/sessions/{sid}/skipped  - if they say log it, use the cortex log skill.",
           file=sys.stderr)
     return 2

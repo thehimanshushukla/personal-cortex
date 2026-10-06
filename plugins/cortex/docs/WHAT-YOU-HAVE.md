@@ -33,23 +33,23 @@ The short version: each of these hooks exists because something went wrong first
 
 Say these in your own words. Exact phrases are not needed.
 
-| Say | What happens | Value |
-|---|---|---|
-| "log this" | Writes up the session. It also saves each decision, lesson, insight, how-to, new person and follow-up as its own page, then checks, builds and backs up. | Nothing learned stays buried in a chat. |
-| "get me up to speed on X" | A deep brief on a project, person or organisation from your pages. | Pick up anything in a minute. |
-| "show my card" | The start card, on demand. | A quick view of where things stand. |
-| "go through this meeting" (paste a transcript or give a file) | Creates a meeting page and decision pages. Writes follow-ups, updates people pages and drafts a follow-up email for you to send. | A meeting becomes actions and a record in minutes. |
-| "what did I promise whom" | Every open follow-up by person, yours and theirs, overdue first. | Nothing slips. |
-| "prep me for my call with X" | One page covering who they are, history, open items and three talking points. | You walk in prepared. |
-| "bring in this folder / my OneNote export / this deck" | Keeps the original file in `sources/` and turns each file into a note in `inbox/`. Then proposes where each note belongs (area, project, type, tags, links) on the sorting desk. | Old notes join your cortex in the right place instead of sitting idle. |
-| "open the sorting desk" | Shows the proposals. Say "accept all", "accept all except 3", or "move 4 to ...". Nothing is filed until you confirm. | You stay in control of where everything goes. |
-| "what should I automate" | Reads how you have worked and proposes up to 5 improvements, each with the dates it saw the pattern: a new skill, an automatic action, a scheduled job, a standing rule or a template. Answer Yes, Not now or Never. | The cortex learns your way of working. This becomes useful after a week or two of use. |
-| (after a Yes) | Builds what you approved. A new skill starts on a 30-day trial and is retired if unused. | Only improvements you use stay. |
-| "how does my cortex work" | Explains any part, using your own pages. | Learn as you go. |
-| "back up my cortex" | Saves and pushes to GitHub now. | Peace of mind. |
-| "update my cortex" | Moves you to a newer version without touching your pages. | New features, nothing lost. |
-| "send feedback" / "I wish it could..." / "something is broken" | Saves your note, shows you exactly what will be sent, and on your yes sends it to the maker's feedback form (an email draft if you are offline). | Your requests shape the next version. |
-| "what's coming next" | Shows what the next updates bring. | You know what to expect. |
+| Say | What happens | Value | Why it exists |
+|---|---|---|---|
+| "log this" | Writes up the session. It also saves each decision, lesson, insight, how-to, new person and follow-up as its own page, then checks, builds and backs up. | Nothing learned stays buried in a chat. | In one nine-day stretch, 44 decisions, problems and lessons were written down only inside session notes, where nobody would ever find them. |
+| "get me up to speed on X" | A deep brief on a project, person or organisation from your pages. | Pick up anything in a minute. | "Get me up to speed" turned out to be about a quarter of all sessions. It was worth doing properly, every time. |
+| "show my card" | The start card, on demand. | A quick view of where things stand. | Same reason as the start card: no session should start from zero. |
+| "go through this meeting" (paste a transcript or give a file) | Creates a meeting page and decision pages. Writes follow-ups, updates people pages and drafts a follow-up email for you to send. | A meeting becomes actions and a record in minutes. | Turning a meeting into actions by hand was repeated in more than 15 sessions before it became a skill. |
+| "what did I promise whom" | Every open follow-up by person, yours and theirs, overdue first. | Nothing slips. | Meeting items owned by other people kept turning into personal to-dos. Follow-ups now say whose they are: mine or theirs. |
+| "prep me for my call with X" | One page covering who they are, history, open items and three talking points. | You walk in prepared. | Built for this kit: everything needed is already in your pages, so a call never starts cold. |
+| "bring in this folder / my OneNote export / this deck" | Keeps the original file in `sources/` and turns each file into a note in `inbox/`. Then proposes where each note belongs (area, project, type, tags, links) on the sorting desk. | Old notes join your cortex in the right place instead of sitting idle. | Built for this kit: imported notes that land in one folder are rarely opened again. |
+| "open the sorting desk" | Shows the proposals. Say "accept all", "accept all except 3", or "move 4 to ...". Nothing is filed until you confirm. | You stay in control of where everything goes. | Automatic filing gets some things wrong. You decide, the cortex does the work. |
+| "what should I automate" | Reads how you have worked and proposes up to 5 improvements, each with the dates it saw the pattern: a new skill, an automatic action, a scheduled job, a standing rule or a template. Answer Yes, Not now or Never. | The cortex learns your way of working. This becomes useful after a week or two of use. | The skills above were found by reading months of sessions for repeated work. Suggest does that reading for you, continuously. |
+| (after a Yes) | Builds what you approved. A new skill starts on a 30-day trial and is retired if unused. | Only improvements you use stay. | An audit found 194 skills installed and only 5 written for real work. Unused skills pile up unless something retires them. |
+| "how does my cortex work" | Explains any part, using your own pages. | Learn as you go. | A system you do not understand is a system you stop using. |
+| "back up my cortex" | Saves and pushes to GitHub now. | Peace of mind. | See the weekly backup above. |
+| "update my cortex" | Moves you to a newer version without touching your pages. | New features, nothing lost. | Copies of a kit that cannot be updated go stale on every machine. |
+| "send feedback" / "I wish it could..." / "something is broken" | Saves your note, shows you exactly what will be sent, and on your yes sends it to the maker's feedback form (an email draft if you are offline). | Your requests shape the next version. | This kit gets better from the people using it. |
+| "what's coming next" | Shows what the next updates bring. | You know what to expect. | |
 
 ## 4. Backup
 

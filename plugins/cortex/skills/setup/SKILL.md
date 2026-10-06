@@ -7,6 +7,13 @@ description: Set up a new cortex from scratch with a guided, one-question-at-a-t
 
 The person starts with an empty cortex. You interview them level by level, explain each level, show the full plan, and build only when they say yes. They do not write code; you run every command for them.
 
+## Open with why this exists (say this first, before any question)
+
+In three short sentences, in your own words:
+"This setup comes from a year of daily work with AI. Every session used to start from zero, and decisions and their reasons got lost between sessions. Each piece you are about to set up fixes one of those problems, and I will show you which one as we go."
+
+Then start Step 1.
+
 ## Rules for the whole interview
 
 - Ask ONE question per message. Wait for the answer.
