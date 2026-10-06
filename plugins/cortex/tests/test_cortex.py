@@ -262,3 +262,15 @@ def test_chat_length_warns_once_per_level(env, tmp_path):
 def test_hooks_fail_soft_on_garbage(env):
     r = subprocess.run([sys.executable, str(HOOKS), "guard"], input="not json", capture_output=True, text=True, env=env["env"])
     assert r.returncode == 0
+
+
+def test_feedback_dry_run_uses_kit_details(env):
+    (env["vault"] / "kit.yaml").write_text("kit_version: 0.1.1\nfeedback_name: Test Person\nfeedback_email: t@example.com\n")
+    r = run(env, "feedback", "--type", "idea", "--message", "weekly summary please", "--dry-run")
+    assert r.returncode == 0
+    assert "Test Person" in r.stdout and "Idea or feature request" in r.stdout and "0.1.1" in r.stdout
+
+
+def test_feedback_refuses_without_details(env):
+    r = run(env, "feedback", "--type", "idea", "--message", "x", "--dry-run")
+    assert r.returncode == 2 and "Missing: name, email" in r.stdout

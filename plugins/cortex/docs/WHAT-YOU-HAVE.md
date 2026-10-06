@@ -48,7 +48,7 @@ Say these in your own words. Exact phrases are not needed.
 | "how does my cortex work" | Explains any part, using your own pages. | Learn as you go. |
 | "back up my cortex" | Saves and pushes to GitHub now. | Peace of mind. |
 | "update my cortex" | Moves you to a newer version without touching your pages. | New features, nothing lost. |
-| "send feedback" / "I wish it could..." / "something is broken" | Saves your note and opens a ready-to-send email to the maker. You press Send. | Your requests shape the next version. |
+| "send feedback" / "I wish it could..." / "something is broken" | Saves your note, shows you exactly what will be sent, and on your yes sends it to the maker's feedback form (an email draft if you are offline). | Your requests shape the next version. |
 | "what's coming next" | Shows what the next updates bring. | You know what to expect. |
 
 ## 4. Backup
@@ -59,7 +59,7 @@ Say these in your own words. Exact phrases are not needed.
 
 ## 5. Help, feedback and what's next
 
-- **Feedback or ideas:** say "send feedback". The plugin drafts the email for you.
-- **Problems:** say "something is broken". It runs a health check and includes the result in the email draft.
+- **Feedback or ideas:** say "send feedback". You see exactly what is sent before it goes.
+- **Problems:** say "something is broken". It runs a health check and includes the result in the report.
 - **Contact:** info@thehimanshushukla.com
 - **What's next:** say "what's coming next", or see `docs/ROADMAP.md` in the plugin.

@@ -17,6 +17,8 @@ Commands:
   sort-desk             print the sorting desk
   doctor                health check in plain words
   install-backup        weekly backup LaunchAgent (Sundays 18:00 local)
+  feedback --type T --message M [--name N --email E --org O --contact yes|no] [--dry-run]
+                        submit to the maker's feedback form (the skill shows it and asks first)
 """
 from __future__ import annotations
 
@@ -688,6 +690,51 @@ def cmd_doctor(args) -> int:
     return 0 if ok else 1
 
 
+FEEDBACK_FORM = "https://docs.google.com/forms/d/e/1FAIpQLSev73gOwoi9xKCcABXqMJlzQ2sLBw7k2oEbMHAHyS7-RSr3Ig/formResponse"
+FEEDBACK_FIELDS = {"name": "entry.1113413954", "email": "entry.173656857", "org": "entry.703318526",
+                   "version": "entry.592227497", "type": "entry.1881441667", "message": "entry.891232302",
+                   "contact": "entry.885549406"}
+FEEDBACK_TYPES = {"idea": "Idea or feature request", "problem": "Something is broken", "question": "Question"}
+
+
+def cmd_feedback(args) -> int:
+    import urllib.parse
+    import urllib.request
+    kit = {}
+    try:
+        kit = parse_kit(vault_path(args.vault))
+    except SystemExit:
+        pass
+    data = {
+        "name": args.name or kit.get("feedback_name", ""),
+        "email": args.email or kit.get("feedback_email", ""),
+        "org": args.org or kit.get("feedback_org", ""),
+        "version": kit.get("kit_version", "") or load_config().get("kit_version", ""),
+        "type": FEEDBACK_TYPES[args.type],
+        "message": args.message,
+        "contact": "Yes" if args.contact == "yes" else "No",
+    }
+    missing = [k for k in ("name", "email", "message") if not data[k]]
+    if missing:
+        print("Missing: " + ", ".join(missing) + ". Ask the person, then run again.")
+        return 2
+    print("Will send to the Cortex feedback form:")
+    for k, v in data.items():
+        print(f"  {k}: {v}")
+    if args.dry_run:
+        return 0
+    body = urllib.parse.urlencode({FEEDBACK_FIELDS[k]: v for k, v in data.items()}).encode()
+    req = urllib.request.Request(FEEDBACK_FORM, data=body, headers={"Content-Type": "application/x-www-form-urlencoded"})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            ok = r.status == 200
+    except Exception as e:  # offline, blocked by a company network, form changed
+        print(f"Could not reach the feedback form ({e}). Use the email fallback: info@thehimanshushukla.com")
+        return 1
+    print("Sent. Thank you - it goes straight to the maker." if ok else "The form did not accept it; use the email fallback.")
+    return 0 if ok else 1
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="cortex")
     ap.add_argument("--vault")
@@ -702,6 +749,10 @@ def main(argv=None) -> int:
     b = sub.add_parser("backup"); b.add_argument("--if-older-than-days", type=int); b.add_argument("--quiet", action="store_true")
     h = sub.add_parser("history"); h.add_argument("--days", type=int, default=30)
     sub.add_parser("sort-desk"); sub.add_parser("doctor"); sub.add_parser("install-backup")
+    f = sub.add_parser("feedback")
+    f.add_argument("--type", choices=sorted(FEEDBACK_TYPES), required=True); f.add_argument("--message", required=True)
+    f.add_argument("--name"); f.add_argument("--email"); f.add_argument("--org")
+    f.add_argument("--contact", choices=["yes", "no"], default="yes"); f.add_argument("--dry-run", action="store_true")
     # --vault is accepted after the subcommand too (the LaunchAgent passes it that way)
     argv = list(sys.argv[1:] if argv is None else argv)
     if "--vault" in argv[1:]:
@@ -710,7 +761,7 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
     fn = {"build": cmd_build, "check": cmd_check, "card": cmd_card, "new": cmd_new, "backup": cmd_backup,
           "history": cmd_history, "sort-desk": cmd_sort_desk, "doctor": cmd_doctor,
-          "install-backup": cmd_install_backup}[args.cmd]
+          "install-backup": cmd_install_backup, "feedback": cmd_feedback}[args.cmd]
     return fn(args)
 
 
