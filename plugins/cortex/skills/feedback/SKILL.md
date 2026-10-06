@@ -5,13 +5,13 @@ description: Send feedback, a feature request or a problem report to the maker o
 
 # Feedback, requests and what's next
 
-Below, `cortex` means `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/cortex.py"`. The vault path is in `~/.cortex/config.json`.
+Below, `cortex` means `python3 ~/.cortex/engine/scripts/cortex.py`. The vault path is in `~/.cortex/config.json`.
 
 The maker's contact is **info@thehimanshushukla.com**. Nothing is sent without the person seeing it first and saying yes. Feedback goes through the maker's feedback form, with an email draft as the fallback.
 
 ## "What's coming next" / "what's new"
 
-Read `${CLAUDE_PLUGIN_ROOT}/docs/ROADMAP.md` and `${CLAUDE_PLUGIN_ROOT}/docs/CHANGELOG.md`.
+Read `~/.cortex/engine/docs/ROADMAP.md` and `~/.cortex/engine/docs/CHANGELOG.md`.
 - Say which version they have (`kit_version` in `kit.yaml`).
 - Say what the latest version added.
 - Say what is planned next, in plain words.

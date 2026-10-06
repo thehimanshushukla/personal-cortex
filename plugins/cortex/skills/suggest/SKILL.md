@@ -7,7 +7,7 @@ description: Look back at how the person has actually worked and propose up to f
 
 Find the patterns in how the person really works, and propose a small number of concrete improvements, each backed by dates. **Never install anything. Only propose.** Building happens in the build-skill skill, after a yes.
 
-Below, `cortex` means `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/cortex.py"`. The vault path is in `~/.cortex/config.json`.
+Below, `cortex` means `python3 ~/.cortex/engine/scripts/cortex.py`. The vault path is in `~/.cortex/config.json`.
 
 ## 1. Gather the evidence (read only)
 
@@ -24,15 +24,15 @@ Treat "prep me for Alex", "brief me before the Alex call" and "what do I know ab
 
 | What you see | Times needed | Propose |
 |---|---|---|
-| The person corrects the same thing (a wording, a fact, a format, "no, we say members not customers") | 2+ | **Standing rule** in their CLAUDE.md |
+| The person corrects the same thing (a wording, a fact, a format, "no, we say members not customers") | 2+ | **Standing rule** in their AGENTS.md |
 | The same multi-step procedure asked for, or walked through by hand | 3+ | **Skill** |
 | "every time", "always", "whenever", "after each" about an action ("always save to GitHub after", "every time I debrief, also...") | 1+ clear statement, or 2+ hints | **Automatic action** (a hook) |
 | A task on a rhythm: weekly, monthly, "before every call", "every Friday" | 3+ occurrences | **Scheduled job** |
 | The same page shape rebuilt by hand (the same headings again and again) | 3+ | **Template** |
 | A trial skill past its `trial_until` with no use seen | - | **Retire** it |
-| A need that a vetted add-on in `${CLAUDE_PLUGIN_ROOT}/docs/CATALOG.md` already covers, matching its "propose when" signal | as the entry says | **Install from the catalog** (say who makes it and its license) |
-| The same rule is written in CLAUDE.md but was broken 2+ times anyway | 2+ | **Automatic action** (a hook): a rule written down but still broken needs enforcing |
-| CLAUDE.md has grown past about 150 lines, or holds history instead of instructions | - | **Tidy CLAUDE.md** (hand to the guide's "check my CLAUDE.md") |
+| A need that a vetted add-on in `~/.cortex/engine/docs/CATALOG.md` already covers, matching its "propose when" signal | as the entry says | **Install from the catalog** (say who makes it and its license) |
+| The same rule is written in AGENTS.md but was broken 2+ times anyway | 2+ | **Automatic action** (a hook): a rule written down but still broken needs enforcing |
+| AGENTS.md has grown past about 150 lines, or holds history instead of instructions | - | **Tidy the instruction file** (hand to the guide's "check my CLAUDE.md") |
 
 Rules for the evidence:
 - **Only real items.** Every proposal must cite real, dated items from the history or session pages. If you cannot point to the dates, drop the proposal.
@@ -55,7 +55,7 @@ Rank by times seen multiplied by time saved each time (a rough guess). Show at m
 
 2. Standing rule - "Say member companies, never customers"
    Seen: 2 corrections - 5 Oct, 11 Oct
-   Would do: add one line to your CLAUDE.md so every session follows it
+   Would do: add one line to your instructions (AGENTS.md) so every session follows it
    Effort: small
    Yes / Not now / Never?
 ```
@@ -88,7 +88,7 @@ If `kit.yaml` has `teach: short`, use one sentence.
 
 ## Rules
 
-- **Never install, write skills, change hooks or edit CLAUDE.md here.** Only propose and record.
+- **Never install, write skills, change hooks or edit AGENTS.md here.** Only propose and record.
 - **At most 5 proposals per run.** Fewer is fine. None is fine if nothing is real.
 - **Never invent evidence or dates.**
 - **Use plain words and plain hyphens.**

@@ -7,7 +7,7 @@ description: Build an improvement the person approved - a new skill, a standing 
 
 Build exactly one approved improvement, show it to the person, and start it on trial. Ground everything in the person's real examples.
 
-Below, `cortex` means `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/cortex.py"`. The vault path is in `~/.cortex/config.json`. All builds go **inside the vault**, so they travel with it and are backed up.
+Below, `cortex` means `python3 ~/.cortex/engine/scripts/cortex.py`. The vault path is in `~/.cortex/config.json`. All builds go **inside the vault**, so they travel with it and are backed up.
 
 ## 0. Inputs
 
@@ -52,7 +52,7 @@ built_from: [<evidence dates>]
 
 ### Standing rule
 
-Append to the vault `CLAUDE.md`, in the person's own part, **outside** the `<!-- cortex:begin ... -->` / `<!-- cortex:end -->` markers. Never edit inside the markers.
+Append to the vault `AGENTS.md`, in the person's own part, **outside** the `<!-- cortex:begin ... -->` / `<!-- cortex:end -->` markers. Never edit inside the markers.
 
 ```
 - <the rule in one line>. (Added <today>: you corrected this on <dates>.)
@@ -60,7 +60,7 @@ Append to the vault `CLAUDE.md`, in the person's own part, **outside** the `<!--
 
 ### Template
 
-Write `<vault>/_templates/<name>.md` containing the frontmatter skeleton and the headings that were rebuilt by hand. Mention it in the vault CLAUDE.md person's part: "Use `_templates/<name>.md` for <what>."
+Write `<vault>/_templates/<name>.md` containing the frontmatter skeleton and the headings that were rebuilt by hand. Mention it in the vault AGENTS.md person's part: "Use `_templates/<name>.md` for <what>."
 
 ### Scheduled job
 
@@ -110,5 +110,5 @@ If `kit.yaml` has `teach: short`, use one sentence.
 - **Build only what was approved,** one item at a time.
 - **Confirm before installing any scheduled job or hook.**
 - **Never touch the plugin's own files.** Everything goes in the vault.
-- **Never edit inside the cortex markers in CLAUDE.md.**
+- **Never edit inside the cortex markers in AGENTS.md.**
 - **Use plain words and plain hyphens.**

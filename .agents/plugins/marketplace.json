@@ -1,0 +1,7 @@
+{
+  "name": "personal-cortex",
+  "interface": { "displayName": "Cortex" },
+  "plugins": [
+    { "name": "cortex", "source": "./plugins/cortex" }
+  ]
+}

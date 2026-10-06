@@ -48,7 +48,33 @@ def emit_context(event: str, text: str) -> None:
 
 # ---------------------------------------------------------------- session start
 
+ENGINE = Path.home() / ".cortex" / "engine"
+
+
+def sync_engine() -> None:
+    """Keep a stable copy of scripts, templates and docs at ~/.cortex/engine.
+
+    Skills refer to that path, so they work in every coding tool, whichever way the
+    plugin was installed (Claude Code fills in its plugin path; Codex and others do not).
+    """
+    import shutil
+    root = HERE.parent
+    stamp = ENGINE / ".source"
+    marker = f"{root}|{(root / '.claude-plugin' / 'plugin.json').stat().st_mtime if (root / '.claude-plugin' / 'plugin.json').exists() else 0}"
+    if stamp.exists() and stamp.read_text() == marker:
+        return
+    ENGINE.mkdir(parents=True, exist_ok=True)
+    for sub in ("scripts", "templates", "docs"):
+        if (root / sub).is_dir():
+            shutil.copytree(root / sub, ENGINE / sub, dirs_exist_ok=True)
+    stamp.write_text(marker)
+
+
 def session_start(p: dict) -> int:
+    try:
+        sync_engine()
+    except OSError:
+        pass
     v = vault()
     if v:
         sd = state_dir(p)
@@ -156,6 +182,21 @@ CRED_DIRS = [".ssh", ".aws", ".gnupg", "Library/Keychains"]
 SWEEP = re.compile(r"\bgit\s+(add\s+(-A|--all|\.(\s|$))|commit\s+(-[a-zA-Z]*a[a-zA-Z]*\b|--all))")
 
 
+PATCH_FILE = re.compile(r"^\*\*\* (?:Add|Update|Delete) File: (.+)$|^\*\*\* Move to: (.+)$", re.M)
+
+
+def patch_paths(p: dict) -> list[str]:
+    """Files touched by a Codex apply_patch call (tool_input.command holds the patch)."""
+    text = (p.get("tool_input") or {}).get("command", "") or ""
+    cwd = p.get("cwd") or os.getcwd()
+    out = []
+    for m in PATCH_FILE.finditer(text):
+        f = (m.group(1) or m.group(2) or "").strip()
+        if f:
+            out.append(str((Path(cwd) / Path(f).expanduser()).resolve()))
+    return out
+
+
 def guard(p: dict) -> int:
     tool = p.get("tool_name", "")
     ti = p.get("tool_input") or {}
@@ -181,30 +222,35 @@ def guard(p: dict) -> int:
                   "so one chat never saves another chat's half-done pages. The weekly backup handles everything else.",
                   file=sys.stderr)
             return 2
-    elif tool in ("Write", "Edit", "MultiEdit", "NotebookEdit"):
-        fp = str(Path(ti.get("file_path", "") or ti.get("notebook_path", "")).expanduser())
+    elif tool in ("Write", "Edit", "MultiEdit", "NotebookEdit", "apply_patch"):
+        fps = patch_paths(p) if tool == "apply_patch" else [str(Path(ti.get("file_path", "") or ti.get("notebook_path", "")).expanduser())]
         home = str(Path.home())
-        for d in CRED_DIRS:
-            if fp.startswith(f"{home}/{d}/") or fp == f"{home}/{d}":
-                print(f"Cortex safety guard: refusing to write into ~/{d} (credentials).", file=sys.stderr)
-                return 2
+        for fp in fps:
+            for d in CRED_DIRS:
+                if fp.startswith(f"{home}/{d}/") or fp == f"{home}/{d}":
+                    print(f"Cortex safety guard: refusing to write into ~/{d} (credentials).", file=sys.stderr)
+                    return 2
     return 0
 
 
 def post_write(p: dict) -> int:
     v = vault()
     ti = p.get("tool_input") or {}
-    fp = ti.get("file_path") or ti.get("notebook_path")
-    if not v or not fp:
-        return 0
-    fp = str(Path(fp).expanduser().resolve())
-    if not fp.startswith(str(v) + os.sep):
+    if p.get("tool_name") == "apply_patch":
+        paths = patch_paths(p)
+    else:
+        fp = ti.get("file_path") or ti.get("notebook_path")
+        paths = [str(Path(fp).expanduser().resolve())] if fp else []
+    paths = [f for f in paths if v and f.startswith(str(v) + os.sep)]
+    if not paths:
         return 0
     led = state_dir(p) / "written.txt"
     seen = set(led.read_text().splitlines()) if led.exists() else set()
-    if fp not in seen:
-        with led.open("a") as fh:
-            fh.write(fp + "\n")
+    with led.open("a") as fh:
+        for f in paths:
+            if f not in seen:
+                fh.write(f + "\n")
+                seen.add(f)
     return 0
 
 

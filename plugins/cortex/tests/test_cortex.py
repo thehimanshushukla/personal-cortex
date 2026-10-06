@@ -274,3 +274,37 @@ def test_feedback_dry_run_uses_kit_details(env):
 def test_feedback_refuses_without_details(env):
     r = run(env, "feedback", "--type", "idea", "--message", "x", "--dry-run")
     assert r.returncode == 2 and "Missing: name, email" in r.stdout
+
+
+# ---------------------------------------------------------------- Codex (apply_patch) and engine sync
+
+PATCH = """*** Begin Patch
+*** Add File: {a}
++hello
+*** Update File: {b}
+@@
+-x
++y
+*** End Patch"""
+
+
+def test_codex_apply_patch_ledger(env):
+    sid = "codex1"
+    v = env["vault"]
+    patch = PATCH.format(a="people/new-person.md", b=str(v / "people/other.md"))
+    hook(env, "post-write", {"session_id": sid, "tool_name": "apply_patch", "cwd": str(v), "tool_input": {"command": patch}})
+    led = (env["home"] / ".cortex/sessions" / sid / "written.txt").read_text()
+    assert "people/new-person.md" in led and "people/other.md" in led
+
+
+def test_codex_apply_patch_guard_blocks_credentials(env):
+    patch = PATCH.format(a=str(env["home"] / ".ssh/authorized_keys"), b="x.md")
+    r = hook(env, "guard", {"tool_name": "apply_patch", "cwd": str(env["vault"]), "tool_input": {"command": patch}})
+    assert r.returncode == 2
+
+
+def test_engine_synced_to_stable_path(env):
+    hook(env, "session-start", {"session_id": "e1"})
+    eng = env["home"] / ".cortex/engine"
+    assert (eng / "scripts/cortex.py").exists() and (eng / "templates/vault/AGENTS.md").exists()
+    assert (eng / "docs/WHAT-YOU-HAVE.md").exists()

@@ -7,7 +7,7 @@ description: Bring existing notes and files into the cortex - keeps the original
 
 Bring files in without losing anything. Each file is filed only after the person confirms where it goes, on the sorting desk.
 
-Below, `cortex` means `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/cortex.py"`. The vault path is in `~/.cortex/config.json`.
+Below, `cortex` means `python3 ~/.cortex/engine/scripts/cortex.py`. The vault path is in `~/.cortex/config.json`.
 
 ## 1. Know what is coming
 

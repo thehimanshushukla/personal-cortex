@@ -7,7 +7,7 @@ description: Review the sorting desk and file imported notes into the right area
 
 Show the import proposals, let the person accept or change them, then file them correctly. **Nothing is filed until they confirm.**
 
-Below, `cortex` means `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/cortex.py"`. The vault path is in `~/.cortex/config.json`.
+Below, `cortex` means `python3 ~/.cortex/engine/scripts/cortex.py`. The vault path is in `~/.cortex/config.json`.
 
 ## 1. Show the desk
 

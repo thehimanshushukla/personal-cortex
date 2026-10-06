@@ -1,0 +1,8 @@
+{
+  "name": "cortex",
+  "version": "0.3.0",
+  "description": "A working record for your AI sessions: a guided setup builds the structure you choose, every session starts from your card, and nothing learned is lost at the end.",
+  "keywords": ["memory", "knowledge", "second-brain", "context", "productivity"],
+  "skills": "./skills/",
+  "hooks": "./hooks/hooks.json"
+}

@@ -7,7 +7,7 @@ description: One-screen brief before a call or meeting with a person or organisa
 
 Give the person one screen they can read in two minutes before a call.
 
-Below, `cortex` means `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/cortex.py"`. The vault path is in `~/.cortex/config.json`.
+Below, `cortex` means `python3 ~/.cortex/engine/scripts/cortex.py`. The vault path is in `~/.cortex/config.json`.
 
 ## 1. Find who it is
 

@@ -10,7 +10,7 @@ A professional on a Mac with a paid Claude plan who does not write code. They us
 
 | Piece | Where | Who edits |
 |---|---|---|
-| Engine (this plugin: skills, hooks, scripts, templates) | Plugin cache, `${CLAUDE_PLUGIN_ROOT}` | Nobody; replaced on update |
+| Engine (this plugin: skills, hooks, scripts, templates) | Plugin cache, `~/.cortex/engine` | Nobody; replaced on update |
 | Record (the vault: their markdown pages) | A folder they choose, default `~/cortex`, a git repo backed up to their private GitHub | Them and Claude |
 
 A small pointer file, `~/.cortex/config.json`, tells the hooks where the vault is:
@@ -140,7 +140,7 @@ A follow-up is a task line in any page. It names a person, may name a date, and 
 
 The build collects every open follow-up into `_cortex/followups.md`.
 
-## Scripts (`${CLAUDE_PLUGIN_ROOT}/scripts/`)
+## Scripts (`~/.cortex/engine/scripts/`)
 
 Each is plain `python3 <script> ...`, uses the standard library only, and finds the vault from `~/.cortex/config.json` unless `--vault` is given.
 
@@ -158,7 +158,7 @@ Each is plain `python3 <script> ...`, uses the standard library only, and finds 
 
 ## Hooks (`hooks/hooks.json`)
 
-Each hook is `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/hooks.py <event>`, and each one **fails soft**: any internal error exits 0.
+Each hook is `python3 ~/.cortex/engine/scripts/hooks.py <event>`, and each one **fails soft**: any internal error exits 0.
 
 | Event | What it does |
 |---|---|

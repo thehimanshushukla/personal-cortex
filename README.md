@@ -31,12 +31,21 @@ Each piece here is the fix for one of those failures, taken from a setup that ha
 
 ## The Cortex plugin: the same system, set up for you
 
-If you do not want to copy files by hand, install the plugin. It works in the Claude desktop app's Code tab or in Claude Code, on a Mac.
+If you do not want to copy files by hand, install the plugin. It works in the Claude desktop app's Code tab, in Claude Code, and in Codex, on a Mac.
 
 ```
 claude plugin marketplace add thehimanshushukla/personal-cortex
 claude plugin install cortex@personal-cortex
 ```
+
+**Using Codex instead?** The same plugin installs in Codex:
+
+```
+codex plugin marketplace add thehimanshushukla/personal-cortex
+codex plugin add cortex@personal-cortex
+```
+
+Your cortex keeps its instructions in `AGENTS.md`, which Codex, Cursor, Copilot and others read. `CLAUDE.md` and `GEMINI.md` are one-line pointers to it, and skills follow the open Agent Skills format. Cursor, Gemini CLI and Copilot adapters are next on the roadmap.
 
 Then say **"set up my cortex"**. A guided setup asks how you want your world organised (personal, work, each organisation you work with), explains each level as it goes, and builds an empty cortex in exactly that shape, backed up to your own private GitHub. Nothing is loaded that you did not choose. When it finishes, it walks you through everything you now have.
 

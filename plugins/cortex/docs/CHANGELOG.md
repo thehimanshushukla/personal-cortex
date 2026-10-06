@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.3.0
+Works in Codex too: Codex plugin manifest and marketplace, hooks handle Codex file edits (apply_patch). The cortex's instructions now live in AGENTS.md (CLAUDE.md and GEMINI.md point to it). Skills use a stable engine copy at ~/.cortex/engine, so they work in any tool.
+
 ## 0.2.3
 The first reply of every session opens with a short "Your cortex" card; Suggest reads every session where Cortex was active, in any folder.
 

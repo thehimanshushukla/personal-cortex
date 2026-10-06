@@ -87,7 +87,7 @@ Print the full tree with their real names, for example:
 
 ```
 ~/cortex/
-  CLAUDE.md, kit.yaml, home.md
+  AGENTS.md (the instructions every coding tool reads), CLAUDE.md and GEMINI.md (one-line pointers to it), kit.yaml, home.md
   people/   organisations/   sources/   inbox/
   personal/  (_index.md, meetings/)
   acme/       (_index.md, meetings/, sites/, pilots/, committees/)
@@ -99,8 +99,8 @@ Say: "Collection folders start empty. Each project or center gets its own folder
 
 1. **Tools check:** `xcode-select -p`. If it fails: "Your Mac needs Apple's free command line tools for backup. A window will open - click Install, it takes a few minutes." Run `xcode-select --install`, wait for them to confirm, re-check.
 2. **Folders:** create vault root, `people/`, `organisations/`, `sources/`, `inbox/`, `_cortex/`, each area folder, its `meetings/` if chosen, and each collection folder (add an empty `.gitkeep` so git keeps empty folders).
-3. **Files from templates** in `${CLAUDE_PLUGIN_ROOT}/templates/vault/`:
-   - `CLAUDE.md` -> vault `CLAUDE.md` (keep the `<!-- cortex:begin -->` ... `<!-- cortex:end -->` block exactly; their own notes go below it).
+3. **Files from templates** in `~/.cortex/engine/templates/vault/`:
+   - `AGENTS.md` -> vault `AGENTS.md`, plus `CLAUDE.md` and `GEMINI.md` copied as they are (one-line pointers, so Claude Code, Codex, Cursor and Gemini all read the same instructions). Keep the `<!-- cortex:begin -->` ... `<!-- cortex:end -->` block exactly; their own notes go below it).
    - `kit.yaml` -> vault `kit.yaml`; fill in name, areas, collections per area, vault path, github yes/no, `kit_version`, `teach: full`, `setup_date` (today, local `date +%F`).
    - `gitignore` -> vault `.gitignore`.
    - `area_index.md` -> `<area>/_index.md` for each area, filling id `area-<area>`, title, created/updated today, summary from what they said the area is for (ask one line if they did not say).
@@ -110,16 +110,16 @@ Say: "Collection folders start empty. Each project or center gets its own folder
    - If `gh auth status` succeeds: `gh repo create <repo> --private --source <vault> --remote origin --push`.
    - Otherwise walk them through it: open https://github.com/new, name it `<repo>`, choose **Private**, do not add a README, click Create; they paste the URL; you run `git remote add origin <url>` and `git push -u origin main`. If the push asks for sign-in, explain the browser prompt.
    - Never create a public repository. Double-check with `gh repo view --json visibility` when gh is available.
-7. **Weekly backup:** `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/cortex.py install-backup`.
+7. **Weekly backup:** `python3 ~/.cortex/engine/scripts/cortex.py install-backup`.
 8. **Keep chat history longer (ask first):** explain, then ask: "Claude normally deletes your chat history on this Mac after 30 days. Suggest needs it to spot what you repeat. May I change that one Claude setting to keep it for a year? It stays on this Mac. (yes / no)". Only on yes: read `~/.claude/settings.json` (treat a missing file as `{}`), set `"cleanupPeriodDays": 365`, keep every other key exactly as it was, write it back, and show them the before and after line. On no: skip it, and say Suggest will only see the last 30 days.
 9. **Phone access (explain, do not change settings):** "You can continue a session from your phone while this Mac is on, using Remote Control in the Claude app. Your organisation's Claude admin may need to switch it on." Offer to show how later.
-10. **Build and card:** `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/cortex.py build`; fix any error it reports, then `cortex.py card` and show the card.
+10. **Build and card:** `python3 ~/.cortex/engine/scripts/cortex.py build`; fix any error it reports, then `cortex.py card` and show the card.
 
 If any step fails, say in plain words what failed and what you will try; never leave a half-built vault silently. Run `cortex.py doctor` at the end and show its result.
 
 ## Step 7 - The tour: show everything they now have
 
-Do not wait to be asked. Read `${CLAUDE_PLUGIN_ROOT}/docs/WHAT-YOU-HAVE.md` and present it with their real values filled in:
+Do not wait to be asked. Read `~/.cortex/engine/docs/WHAT-YOU-HAVE.md` and present it with their real values filled in:
 - their vault path
 - their GitHub repo URL (from `git -C <vault> remote get-url origin`)
 - their areas

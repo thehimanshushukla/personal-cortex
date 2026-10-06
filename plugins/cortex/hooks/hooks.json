@@ -2,27 +2,27 @@
   "hooks": {
     "SessionStart": [
       { "matcher": "startup|resume|clear", "hooks": [
-        { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks.py\" session-start", "timeout": 20 } ] }
+        { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT:-$PLUGIN_ROOT}/scripts/hooks.py\" session-start", "timeout": 20 } ] }
     ],
     "UserPromptSubmit": [
       { "hooks": [
-        { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks.py\" prompt", "timeout": 10 } ] }
+        { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT:-$PLUGIN_ROOT}/scripts/hooks.py\" prompt", "timeout": 10 } ] }
     ],
     "PreCompact": [
       { "hooks": [
-        { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks.py\" pre-compact", "timeout": 10 } ] }
+        { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT:-$PLUGIN_ROOT}/scripts/hooks.py\" pre-compact", "timeout": 10 } ] }
     ],
     "Stop": [
       { "hooks": [
-        { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks.py\" stop", "timeout": 10 } ] }
+        { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT:-$PLUGIN_ROOT}/scripts/hooks.py\" stop", "timeout": 10 } ] }
     ],
     "PreToolUse": [
-      { "matcher": "Bash|Write|Edit|MultiEdit|NotebookEdit", "hooks": [
-        { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks.py\" guard", "timeout": 10 } ] }
+      { "matcher": "Bash|Write|Edit|MultiEdit|NotebookEdit|apply_patch", "hooks": [
+        { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT:-$PLUGIN_ROOT}/scripts/hooks.py\" guard", "timeout": 10 } ] }
     ],
     "PostToolUse": [
-      { "matcher": "Write|Edit|MultiEdit|NotebookEdit", "hooks": [
-        { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/hooks.py\" post-write", "timeout": 10 } ] }
+      { "matcher": "Write|Edit|MultiEdit|NotebookEdit|apply_patch", "hooks": [
+        { "type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT:-$PLUGIN_ROOT}/scripts/hooks.py\" post-write", "timeout": 10 } ] }
     ]
   }
 }

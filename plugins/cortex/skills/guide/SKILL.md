@@ -9,21 +9,21 @@ Answer what they asked, using their own cortex as the example. Short, plain word
 
 ## Source of truth
 
-For anything about what runs on its own (hooks), what they can ask for (skills), where files live, backup, feedback or what's next, read `${CLAUDE_PLUGIN_ROOT}/docs/WHAT-YOU-HAVE.md` and answer from it. Never describe a hook or skill from memory.
+For anything about what runs on its own (hooks), what they can ask for (skills), where files live, backup, feedback or what's next, read `~/.cortex/engine/docs/WHAT-YOU-HAVE.md` and answer from it. Never describe a hook or skill from memory.
 
 ## Quick actions
 
 - **"open my cortex" / "show me my files":** run `open <vault>`, so Finder opens the folder. Mention that `home.md` is the map.
-- **"back up my cortex":** run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/cortex.py" backup` and say the result in plain words.
-- **"is everything ok" / "health check":** run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/cortex.py" doctor` and explain each line marked FIX.
+- **"back up my cortex":** run `python3 ~/.cortex/engine/scripts/cortex.py backup` and say the result in plain words.
+- **"is everything ok" / "health check":** run `python3 ~/.cortex/engine/scripts/cortex.py doctor` and explain each line marked FIX.
 
 ## "What skills can I add?" / "recommend skills or agents"
 
-Show `${CLAUDE_PLUGIN_ROOT}/docs/CATALOG.md` grouped as it is: who makes each entry, its license, what it does, how to install. Mark anything their history already suggests ("you have made Word documents several times, so this one fits"). Install nothing without their yes.
+Show `~/.cortex/engine/docs/CATALOG.md` grouped as it is: who makes each entry, its license, what it does, how to install. Mark anything their history already suggests ("you have made Word documents several times, so this one fits"). Install nothing without their yes.
 
 ## "Set up my CLAUDE.md well" / "check my CLAUDE.md"
 
-CLAUDE.md is the instruction file every session reads in full. Read the vault's `CLAUDE.md` and `${CLAUDE_PLUGIN_ROOT}/docs/WHAT-GOES-WHERE.md`. Then report in plain words, with line numbers, one short list per finding:
+AGENTS.md is the instruction file every session reads in full (CLAUDE.md and GEMINI.md just point to it). Read the vault's `AGENTS.md` and `~/.cortex/engine/docs/WHAT-GOES-WHERE.md`. Then report in plain words, with line numbers, one short list per finding:
 - **Length:** past about 150 lines, every rule competes with every other. Say which lines could move out.
 - **History instead of instructions:** dated stories, meeting notes or decisions belong in the record (a decision page), not here. Offer to move each one.
 - **Rules that keep being broken:** a rule written down but broken twice needs an automatic action (a hook), not stronger wording. Offer to hand it to Suggest.
@@ -67,7 +67,7 @@ Go one section at a time; after each, ask "Next?" so they can stop.
 4. **Follow-ups.** The line format `- [ ] @person what (due YYYY-MM-DD) {mine|theirs}`. `{mine}` = you owe it, `{theirs}` = someone owes you. "What did I promise whom" lists them all. Show one of theirs if present.
 5. **Bringing in old notes.** Import puts the original file in `sources/` and a copy in `inbox/`; the sorting desk proposes where each one belongs and you accept or change it. Nothing is filed until you confirm.
 6. **Suggest.** After a week or two, "what should I automate" reads how you have worked and proposes up to five improvements (a new skill, an automatic action, a scheduled job, a standing rule, a template), each with the dates it saw the pattern. It never installs anything without your yes, and new skills start on trial.
-7. **Backup.** Every log saves to your private GitHub copy; a weekly backup runs Sunday evening. Run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/cortex.py doctor` and tell them the real last-backup date.
+7. **Backup.** Every log saves to your private GitHub copy; a weekly backup runs Sunday evening. Run `python3 ~/.cortex/engine/scripts/cortex.py doctor` and tell them the real last-backup date.
 8. **Best practices.**
    - One home per thing; let the cortex create the folder the first time.
    - Log before closing - it takes a minute and it is what makes the next card useful.

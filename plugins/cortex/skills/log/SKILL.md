@@ -46,7 +46,7 @@ Follow-up line format:
 
 For each page, get the correct path, id and frontmatter from the script, never by guessing:
 ```
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/cortex.py new <type> --area <area> [--thing <thing>] --title "<title>"
+python3 ~/.cortex/engine/scripts/cortex.py new <type> --area <area> [--thing <thing>] --title "<title>"
 ```
 Write the page at the path it prints, keeping its frontmatter and filling the body. Today's date from `date +%F` (local time). Use `[[id]]` style links in the body only for pages that exist; also list them in `links:`.
 
@@ -59,8 +59,8 @@ Edit `<thing>/_index.md`: refresh "Current state" (2-4 lines), "Open items", and
 ## 5. Check, build, fix
 
 ```
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/cortex.py check <every page you wrote or changed>
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/cortex.py build
+python3 ~/.cortex/engine/scripts/cortex.py check <every page you wrote or changed>
+python3 ~/.cortex/engine/scripts/cortex.py build
 ```
 If either reports errors, fix the pages and run again. Do not continue past an error. Do not tell the person it is saved until build passes.
 
@@ -68,7 +68,7 @@ If either reports errors, fix the pages and run again. Do not continue past an e
 
 - Files to save = lines in `~/.cortex/sessions/<session_id>/written.txt` that are inside the vault, plus anything you edited in this step, plus `_cortex/` generated files.
 - `git -C <vault> add -- <each file by name>` then `git -C <vault> commit -m "log: <date> <thing> - <short title>"`. Never `git add .` or `-A` (another chat may be working in the same vault).
-- `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/cortex.py backup` to push. If the push fails (offline, sign-in), say: "Saved on your Mac; the online copy will catch up at the next backup."
+- `python3 ~/.cortex/engine/scripts/cortex.py backup` to push. If the push fails (offline, sign-in), say: "Saved on your Mac; the online copy will catch up at the next backup."
 - Mark done: `touch ~/.cortex/sessions/<session_id>/logged`.
 
 ## 7. Tell the person (short)

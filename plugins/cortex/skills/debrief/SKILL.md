@@ -7,7 +7,7 @@ description: Turn a meeting into a meeting page, decision pages, follow-ups, upd
 
 Turn one meeting into pages in the cortex, so its decisions and promises can be found later and show up on the start card.
 
-Scripts live at `${CLAUDE_PLUGIN_ROOT}/scripts/cortex.py`. Below, `cortex` means `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/cortex.py"`. The vault path is in `~/.cortex/config.json`.
+Scripts live at `~/.cortex/engine/scripts/cortex.py`. Below, `cortex` means `python3 ~/.cortex/engine/scripts/cortex.py`. The vault path is in `~/.cortex/config.json`.
 
 ## 1. Get the text
 
