@@ -581,7 +581,9 @@ def cmd_history(args) -> int:
                 if e.get("type") != "user" or e.get("isMeta") or e.get("isSidechain"):
                     continue
                 cwd = e.get("cwd", "")
-                if not cwd.startswith(str(vault)):
+                sid = e.get("sessionId", "")
+                # Sessions inside the cortex folder, or anywhere Cortex was active (its hooks keep a folder per session).
+                if not (cwd.startswith(str(vault)) or (sid and (HOME / ".cortex" / "sessions" / sid).is_dir())):
                     continue
                 c = (e.get("message") or {}).get("content")
                 if isinstance(c, list):
@@ -600,7 +602,7 @@ def cmd_history(args) -> int:
         except OSError:
             continue
     rows.sort()
-    print(f"# Typed requests in the cortex folder, last {args.days} days ({len(rows)})\n")
+    print(f"# Typed requests in sessions where Cortex was active, last {args.days} days ({len(rows)})\n")
     for when, sid, text in rows:
         print(f"- {when} [{sid}] {text}")
     pages, _ = load_all(vault)

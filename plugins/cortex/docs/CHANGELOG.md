@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.2.3
+The first reply of every session opens with a short "Your cortex" card; Suggest reads every session where Cortex was active, in any folder.
+
 ## 0.2.2
 Setup asks before changing the chat-history setting; README section "What Cortex touches, sends and runs"; test dependency pinned.
 

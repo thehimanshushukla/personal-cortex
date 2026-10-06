@@ -71,8 +71,11 @@ def session_start(p: dict) -> int:
     except OSError:
         pass
     emit_context("SessionStart",
-                 f"CORTEX (vault: {v}). This is the person's start card - use it, do not re-ask what it already says. "
-                 f"Pages follow the vault's CLAUDE.md and are created with the cortex skills.\n\n{text}")
+                 f"CORTEX (vault: {v}). This is the person's start card. Begin your FIRST reply in this session with a compact "
+                 f"version of it under the heading 'Your cortex' (at most 5 short lines: what is active, anything due or overdue, "
+                 f"anything waiting such as imports or a missing backup), then answer what they asked. Do not show it again later "
+                 f"in the session unless asked. Use it - do not re-ask what it already says. Pages are created with the cortex "
+                 f"skills, wherever this session is running.\n\n{text}")
     return 0
 
 
