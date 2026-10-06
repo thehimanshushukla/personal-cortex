@@ -1,0 +1,11 @@
+# Your cortex settings. Written by setup; safe to read, edit with care.
+# Simple 'key: value' or 'key: [a, b]' lines only.
+name: {{name}}
+vault: {{vault}}
+kit_version: 0.1.0
+setup_date: {{setup_date}}
+areas: [{{areas}}]
+# one line per area: collections_<area>: [ ... ]
+{{collections_lines}}
+github: {{github}}
+teach: full
