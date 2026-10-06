@@ -1,11 +1,21 @@
 ---
 name: guide
-description: Explain how the person's own cortex works, using their own pages as examples - the start card, logging, page types, follow-ups, sorting desk, Suggest, backup and best practices. Use when the person asks "how does my cortex work", "explain my cortex", "what is a lesson page", "what is the difference between a decision and a session", "where does X go", "what happens when I log", "is my cortex backed up", "help", or seems unsure what to do next.
+description: Explain how the person's own cortex works, using their own pages as examples - the start card, logging, page types, follow-ups, sorting desk, Suggest, backup and best practices. Use when the person asks "how does my cortex work", "explain my cortex", "what is a lesson page", "what is the difference between a decision and a session", "where does X go", "what happens when I log", "is my cortex backed up", "help", "open my cortex", "show me my files", "where are my files", "back up my cortex", "is everything ok", "health check", "what hooks do I have", "what can you do", or seems unsure what to do next.
 ---
 
 # How does my cortex work
 
 Answer what they asked, using their own cortex as the example. Short, plain words, no jargon, no analogies.
+
+## Source of truth
+
+For anything about what runs on its own (hooks), what they can ask for (skills), where files live, backup, feedback or what's next, read `${CLAUDE_PLUGIN_ROOT}/docs/WHAT-YOU-HAVE.md` and answer from it. Never describe a hook or skill from memory.
+
+## Quick actions
+
+- **"open my cortex" / "show me my files":** run `open <vault>`, so Finder opens the folder. Mention that `home.md` is the map.
+- **"back up my cortex":** run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/cortex.py" backup` and say the result in plain words.
+- **"is everything ok" / "health check":** run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/cortex.py" doctor` and explain each line marked FIX.
 
 ## First, look at their cortex
 

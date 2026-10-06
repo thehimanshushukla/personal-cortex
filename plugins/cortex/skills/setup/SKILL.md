@@ -110,7 +110,22 @@ Say: "Collection folders start empty. Each project or center gets its own folder
 
 If any step fails, say in plain words what failed and what you will try; never leave a half-built vault silently. Run `cortex.py doctor` at the end and show its result.
 
-## Step 7 - First real session
+## Step 7 - The tour: show everything they now have
+
+Do not wait to be asked. Read `${CLAUDE_PLUGIN_ROOT}/docs/WHAT-YOU-HAVE.md` and present it with their real values filled in:
+- their vault path
+- their GitHub repo URL (from `git -C <vault> remote get-url origin`)
+- their areas
+
+Describe hooks and skills only as that file does, never from memory. Show it in four short parts. Pause after each and ask "Any questions on this part?":
+1. **Where your cortex lives and how to look at it.** Run `open <vault>` so Finder opens the folder while you explain. Mention the GitHub copy, and Obsidian as an optional free viewer.
+2. **What runs on its own.** The hooks table: when, what, why it helps.
+3. **What you can ask for.** The skills table, with the phrases to say.
+4. **Backup, help and what's next.** Feedback goes through "send feedback". Contact is info@thehimanshushukla.com. The next updates are in "what's coming next".
+
+Close the tour with: "You don't need to remember any of this. Say 'how does my cortex work' any time and I'll show it again."
+
+## Step 8 - First real session
 
 Say: "Your cortex is ready and empty. Now do some real work - for example, tell me about something you are working on this week. When you are done, just say 'log this' and I will write it up and show you what I wrote and why."
 
