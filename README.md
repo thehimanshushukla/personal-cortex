@@ -5,7 +5,7 @@
 <p align="center">
   <a href="https://github.com/thehimanshushukla/personal-cortex/actions/workflows/tests.yml"><img src="https://github.com/thehimanshushukla/personal-cortex/actions/workflows/tests.yml/badge.svg" alt="tests"></a>
   <img src="https://img.shields.io/badge/license-Apache%202.0-c9694a" alt="Apache 2.0">
-  <img src="https://img.shields.io/badge/Claude%20Code-plugin-0f1a2e" alt="Claude Code plugin">
+  <img src="https://img.shields.io/badge/plugin-Claude%20Code%20%C2%B7%20Codex-0f1a2e" alt="Plugin for Claude Code and Codex">
   <img src="https://img.shields.io/badge/Codex%20%C2%B7%20Cursor%20%C2%B7%20Gemini%20CLI-record%20and%20AGENTS.md-0f1a2e" alt="other agents">
 </p>
 

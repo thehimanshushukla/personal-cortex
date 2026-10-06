@@ -15,7 +15,7 @@ The one fact sheet about this plugin. Setup reads it to give the tour at the end
 
 ## 2. What runs on its own (hooks)
 
-You never start these. Claude Code runs them at fixed moments.
+You never start these. Your coding tool (Claude Code or Codex) runs them at fixed moments.
 
 | When | What it does | Why it helps you | Why it exists (what went wrong first) |
 |---|---|---|---|
