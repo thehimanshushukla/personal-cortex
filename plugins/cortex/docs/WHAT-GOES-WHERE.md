@@ -21,7 +21,7 @@ If it applies occasionally, it is a skill. A procedure you run once at the end o
 **2. Can Claude find this out by looking, in under ten seconds?**
 Directory layouts, what a script does, what a folder contains. If yes, leave it out. Not because writing it is wrong, but because you will not maintain it, and a stale instruction is worse than none.
 
-This is where I part company with the official guidance, which suggests documenting architecture, commands and conventions. Where something is genuinely non-obvious — a build step with an undocumented flag, a convention nothing in the code hints at — write it down. The rule is not "never describe the project". It is "do not write what Claude can find, because you will not maintain it."
+This is where I part company with the official guidance, which suggests documenting architecture, commands and conventions. Where something is genuinely non-obvious - a build step with an undocumented flag, a convention nothing in the code hints at - write it down. The rule is not "never describe the project". It is "do not write what Claude can find, because you will not maintain it."
 
 **3. Would you say this out loud to a new contractor on day one?**
 If it is too detailed for that, it is reference material. Link to it instead of inlining it.
@@ -45,7 +45,7 @@ The honest signal that something should become a hook is not "this is important"
 
 ### What not to hook
 
-Anything needing judgment about scope. "Never send anything externally" sounds hookable until you try to draw the line mechanically between a draft file, a comment on your own repo, and a message to a client. Every place the line is drawn wrongly trains you to work around the guard — and working around guards is a habit you then carry to the guards that were right.
+Anything needing judgment about scope. "Never send anything externally" sounds hookable until you try to draw the line mechanically between a draft file, a comment on your own repo, and a message to a client. Every place the line is drawn wrongly trains you to work around the guard - and working around guards is a habit you then carry to the guards that were right.
 
 ---
 
