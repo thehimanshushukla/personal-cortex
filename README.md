@@ -44,7 +44,7 @@ Then say **"set up my cortex"**. A guided setup asks how you want your world org
 
 | Piece | What went wrong before it existed |
 |---|---|
-| The start card | Every new chat started from zero; the first ten minutes went on re-explaining the project. |
+| The start card | Every new chat started from zero, and a good part of each session went on re-explaining the project. |
 | The log reminder at the end of a session | In a hurry, sessions got closed without notes, and the reasoning behind decisions was gone a week later. A written rule to log was not enough. |
 | Decisions and lessons as their own pages | In one nine-day stretch, 44 decisions, problems and lessons were recorded only inside session notes, where nobody would find them. |
 | The chat-length warning | Very long chats gave weaker answers and cost the most: in one audit, 72% of the spend came from turns with very long chats. |
@@ -204,7 +204,7 @@ The Stop gate is tested for the bug that is easy to write: a `Stop` hook with no
 
 ## What this is not
 
-It is not a framework, and there is nothing to install beyond copying files. It is not a substitute for reading [the hooks reference](https://code.claude.com/docs/en/hooks); the exit-code semantics are worth ten minutes. It will not make an agent follow your rules through sheer volume. That is the mistake the instruction-file template exists to prevent.
+The three stages are not a framework, and there is nothing to install beyond copying files; the Cortex plugin above is the optional exception. It is not a substitute for reading [the hooks reference](https://code.claude.com/docs/en/hooks); the exit-code semantics are worth ten minutes. It will not make an agent follow your rules through sheer volume. That is the mistake the instruction-file template exists to prevent.
 
 ## Contributing
 
