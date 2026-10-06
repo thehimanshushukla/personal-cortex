@@ -1,0 +1,9 @@
+{
+  "name": "cortex",
+  "version": "0.2.1",
+  "description": "A working record for your AI sessions: a guided setup builds the structure you choose, every session starts from your card, and nothing learned is lost at the end.",
+  "author": { "name": "Himanshu Shukla", "url": "https://thehimanshushukla.com" },
+  "homepage": "https://github.com/thehimanshushukla/personal-cortex",
+  "license": "Apache-2.0",
+  "keywords": ["memory", "knowledge", "second-brain", "context", "productivity"]
+}

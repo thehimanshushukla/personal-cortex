@@ -4,8 +4,8 @@
 
 <p align="center">
   <a href="https://github.com/thehimanshushukla/personal-cortex/actions/workflows/tests.yml"><img src="https://github.com/thehimanshushukla/personal-cortex/actions/workflows/tests.yml/badge.svg" alt="tests"></a>
-  <img src="https://img.shields.io/badge/license-MIT-c9694a" alt="MIT">
-  <img src="https://img.shields.io/badge/Claude%20Code-native-0f1a2e" alt="Claude Code">
+  <img src="https://img.shields.io/badge/license-Apache%202.0-c9694a" alt="Apache 2.0">
+  <img src="https://img.shields.io/badge/Claude%20Code-plugin-0f1a2e" alt="Claude Code plugin">
   <img src="https://img.shields.io/badge/Codex%20%C2%B7%20Cursor%20%C2%B7%20Gemini%20CLI-record%20and%20AGENTS.md-0f1a2e" alt="other agents">
 </p>
 
@@ -28,6 +28,51 @@ That is the whole idea in one screen. The session does not reconstruct the proje
 Every session starts from zero. Rules get written and ignored. Procedures get forgotten. The reasoning behind a decision gets summarised away. Work does not resume; it gets reconstructed, by you, at the start of every conversation.
 
 Each piece here is the fix for one of those failures, taken from a setup that has run for about a year across client programs and my own products. The reasoning behind every piece is in the [Claude Code setup series](https://thehimanshushukla.com/blog/claude-code-setup-series); the files here are the transferable part.
+
+## The Cortex plugin: the same system, set up for you
+
+If you do not want to copy files by hand, install the plugin. It works in the Claude desktop app's Code tab or in Claude Code, on a Mac.
+
+```
+claude plugin marketplace add thehimanshushukla/personal-cortex
+claude plugin install cortex@personal-cortex
+```
+
+Then say **"set up my cortex"**. A guided setup asks how you want your world organised (personal, work, each organisation you work with), explains each level as it goes, and builds an empty cortex in exactly that shape, backed up to your own private GitHub. Nothing is loaded that you did not choose. When it finishes, it walks you through everything you now have.
+
+**Every piece exists because something went wrong first.** From a year of daily use:
+
+| Piece | What it does | What went wrong before it existed |
+|---|---|---|
+| The start card | Opens every session with where things stand: active work, latest decisions, follow-ups due. | Every new chat started from zero, and a good part of each session went on re-explaining the project. |
+| The log reminder | At the end of a session, asks once whether to write it up. | In a hurry, sessions got closed without notes, and the reasoning behind decisions was gone a week later. A written rule to log was not enough. |
+| Decisions and lessons as their own pages | Logging saves each decision and lesson where the next session will find it. | In one nine-day stretch, 44 decisions, problems and lessons were recorded only inside session notes, where nobody would find them. |
+| The chat-length warning | Says when a chat's working memory is about 60% and 80% full. | Very long chats gave weaker answers and cost the most: in one review of my own plan, 72% of the spend sat in turns where the chat had grown past 150K tokens. |
+| The multi-chat guard | Stops one chat from saving another chat's unfinished pages. | With several chats open, one chat's "save everything" swept up another chat's unfinished work, three times in one day. |
+| The weekly backup | Every Sunday, saves everything to your private GitHub. | Work piled up for six days, with nearly 200 changes not backed up anywhere. |
+| Meeting debrief | Turns a meeting transcript into decisions, follow-ups and an email draft. | Turning a meeting into actions by hand was repeated in more than 15 sessions before it became a skill. |
+| Suggest | Proposes skills, automatic actions and rules from how you actually work. It only proposes; every install needs your yes. | Every skill in this kit was found by reading months of sessions for repeated work. Suggest does that reading for you. |
+
+The full list of what runs on its own, what you can ask for, and why each exists is in [plugins/cortex/docs/WHAT-YOU-HAVE.md](plugins/cortex/docs/WHAT-YOU-HAVE.md). Feedback and requests: say "send feedback" inside Cortex. If something does not work, say "something is broken" and it runs a health check first. Or write to info@thehimanshushukla.com.
+
+## What's coming next
+
+The Cortex plugin is at an early version and grows from what its users ask for. Next up:
+- a reviewer agent: a second opinion on important documents before they go out
+- a task board and morning brief
+- an email and calendar sweep that proposes follow-ups for your approval
+- email drafts in your own voice
+
+After that, the highlights:
+- a weekly tidy-up
+- "replaced by" dates on facts
+- fast search across a large cortex
+- a browser dashboard
+- access from anywhere
+- new meeting recordings flagged on the start card
+- Windows support
+
+The full list is in [ROADMAP.md](plugins/cortex/docs/ROADMAP.md). Inside Cortex, say "what's coming next" to see it, or "send feedback" to tell us what you want first.
 
 ## Three stages
 
@@ -160,7 +205,7 @@ The Stop gate is tested for the bug that is easy to write: a `Stop` hook with no
 
 ## What this is not
 
-It is not a framework, and there is nothing to install beyond copying files. It is not a substitute for reading [the hooks reference](https://code.claude.com/docs/en/hooks); the exit-code semantics are worth ten minutes. It will not make an agent follow your rules through sheer volume. That is the mistake the instruction-file template exists to prevent.
+The three stages are not a framework, and there is nothing to install beyond copying files; the Cortex plugin above is the optional exception. It is not a substitute for reading [the hooks reference](https://code.claude.com/docs/en/hooks); the exit-code semantics are worth ten minutes. It will not make an agent follow your rules through sheer volume. That is the mistake the instruction-file template exists to prevent.
 
 ## Contributing
 
@@ -168,4 +213,4 @@ If something here broke in your setup, open an issue. What people trip over shap
 
 ---
 
-Written by [Himanshu Shukla](https://thehimanshushukla.com). The reasoning behind each piece, with the real files and the numbers, is in the [Claude Code setup series](https://thehimanshushukla.com/blog/claude-code-setup-series). MIT licensed.
+Written by [Himanshu Shukla](https://thehimanshushukla.com). The reasoning behind each piece, with the real files and the numbers, is in the [Claude Code setup series](https://thehimanshushukla.com/blog/claude-code-setup-series). Licensed under Apache 2.0 - see [LICENSE](LICENSE) and [NOTICE](NOTICE).

@@ -1,0 +1,8 @@
+{
+  "name": "personal-cortex",
+  "owner": { "name": "Himanshu Shukla", "url": "https://thehimanshushukla.com" },
+  "metadata": { "description": "Cortex: a working record for AI sessions that cannot be skipped." },
+  "plugins": [
+    { "name": "cortex", "source": "./plugins/cortex", "description": "Guided setup, start card, enforced logging, follow-ups, sorting desk for imports, and Suggest - proposals for skills and automations from how you actually work." }
+  ]
+}

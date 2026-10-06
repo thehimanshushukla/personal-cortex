@@ -1,0 +1,7 @@
+# Changelog
+
+## 0.2.0
+Vetted skills and plugins catalog (Suggest proposes from it on evidence), "check my CLAUDE.md", learn-more links to the Claude Code series, feedback form, why-it-exists throughout, Apache 2.0.
+
+## 0.1.0 - first release
+Guided setup (blank start) with an end-of-setup tour, feedback skill (drafts email to info@thehimanshushukla.com), roadmap,, start card, gentle log gate, chat-length warning, safety and multi-chat guards, write ledger, weekly backup to GitHub; skills: setup, guide, log, resume, card, debrief, followups, prep, import, sort, suggest, build-skill, upgrade; validator and builder.
