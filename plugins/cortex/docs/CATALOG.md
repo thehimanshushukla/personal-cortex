@@ -4,11 +4,11 @@ A short, vetted list of add-ons that work well beside your cortex. **Suggest pro
 
 Every entry comes from a known publisher, with its source and license. Nothing is installed without your yes. Anything not on this list deserves a careful look before you install it, because add-ons can run code on your Mac.
 
-To install from the Claude desktop app: Code tab > Plugins > Add marketplace (the repo name), then install the plugin. Or in Claude Code, run the two commands shown.
+A marketplace is a listed source of add-ons. To install from the Claude desktop app: Code tab > Plugins > Add marketplace (the repo name), then install the plugin. Or type the `/plugin` commands shown; in a terminal the same commands start with `claude plugin`.
 
 ## Document skills (Word, Excel, PowerPoint, PDF)
 
-- **Who:** Anthropic. Source: [github.com/anthropics/skills](https://github.com/anthropics/skills). License: source-available, not open source.
+- **Who:** Anthropic. Source: [github.com/anthropics/skills](https://github.com/anthropics/skills). License: source-available, not open source (you can read the code; reuse is limited).
 - **What:** creates and edits real .docx, .xlsx, .pptx and .pdf files, with proper formatting, tables and charts.
 - **Propose when:** the history shows reports, memos, spreadsheets or decks being made or fixed by hand, three times or more.
 - **Install:**
@@ -19,7 +19,7 @@ To install from the Claude desktop app: Code tab > Plugins > Add marketplace (th
 
 ## Skill creator
 
-- **Who:** Anthropic, in the same repo. Part of `example-skills`. License: Apache 2.0.
+- **Who:** Anthropic, in the same repo. Part of `example-skills`. License: Apache 2.0 (its own LICENSE.txt in the repo).
 - **What:** helps write a new skill properly: clear triggers, steps, and tests from real examples.
 - **Propose when:** the person approves two or more skills from Suggest, or says "I want to make my own skill". Build-skill can then use it.
 - **Install:** `/plugin install example-skills@anthropic-agent-skills` (after adding the marketplace above).
@@ -45,7 +45,7 @@ These live in the same marketplace and install the same way. Propose one only wh
 
 ## Agents
 
-- **Reviewer (built in, coming next):** a second opinion on an important document before it goes out. It never grades its own work.
+- **Reviewer (coming next):** a second opinion on an important document before it goes out, from an agent that did not write it.
 - **Any other agent:** Suggest proposes it with build-skill, from your own repeated work, so it carries your examples.
 
 ## Adding to this catalog

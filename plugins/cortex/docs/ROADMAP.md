@@ -3,7 +3,7 @@
 Planned updates, in rough order. Tell us what you want first: say "send feedback".
 
 ## Next
-- **Reviewer agent:** a second opinion on an important document before it goes out. It never grades its own work, and keeps a record of your rulings.
+- **Reviewer agent:** a second opinion on an important document before it goes out, from an agent that did not write it, with a record of your rulings.
 - **Task board + morning brief:** tasks per project, plus a short daily brief of what is due, what is waiting on others, and what has gone quiet.
 - **Email and calendar sweep:** finds follow-ups hiding in your mail and calendar and proposes them for your approval. Needs the Microsoft 365 or Google connector your organisation allows.
 - **Email drafts in your voice:** learns from a few of your sent emails.
