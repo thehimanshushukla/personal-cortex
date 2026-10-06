@@ -9,6 +9,9 @@ Planned updates, in rough order. Tell us what you want first: say "send feedback
 
 ## Later
 - **Weekly tidy-up:** proposes merges and flags stale pages.
+- **Reach it from anywhere:** continue from your phone, or keep an always-on copy on a small private server for when the Mac is off.
+- **Recordings flagged on the card:** a new meeting recording with no debrief shows up the next time you open a session.
+- **A second-opinion reviewer** for important documents before they go out, with a record of your rulings.
 - **"Replaced by" dates on facts:** old facts stop showing up as current.
 - **Fast search** across a large cortex.
 - **A browser dashboard** of your projects, follow-ups and decisions.

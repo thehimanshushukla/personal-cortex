@@ -4,8 +4,8 @@
 
 <p align="center">
   <a href="https://github.com/thehimanshushukla/personal-cortex/actions/workflows/tests.yml"><img src="https://github.com/thehimanshushukla/personal-cortex/actions/workflows/tests.yml/badge.svg" alt="tests"></a>
-  <img src="https://img.shields.io/badge/license-MIT-c9694a" alt="MIT">
-  <img src="https://img.shields.io/badge/Claude%20Code-native-0f1a2e" alt="Claude Code">
+  <img src="https://img.shields.io/badge/license-Apache%202.0-c9694a" alt="Apache 2.0">
+  <img src="https://img.shields.io/badge/Claude%20Code-plugin-0f1a2e" alt="Claude Code plugin">
   <img src="https://img.shields.io/badge/Codex%20%C2%B7%20Cursor%20%C2%B7%20Gemini%20CLI-record%20and%20AGENTS.md-0f1a2e" alt="other agents">
 </p>
 
@@ -54,6 +54,23 @@ Then say **"set up my cortex"**. A guided setup asks how you want your world org
 | Suggest (what should I automate) | Every skill in this kit was found by reading months of sessions for repeated work. Suggest does that reading for you, and proposes; it never installs anything on its own. |
 
 The full list of what runs on its own, what you can ask for, and why each exists is in [plugins/cortex/docs/WHAT-YOU-HAVE.md](plugins/cortex/docs/WHAT-YOU-HAVE.md). Feedback and requests: say "send feedback" inside Cortex, or write to info@thehimanshushukla.com.
+
+## What's coming next
+
+The Cortex plugin is at an early version and grows from what its users ask for. Next up:
+- a task board and morning brief
+- an email and calendar sweep that proposes follow-ups for your approval
+- email drafts in your own voice
+
+After that:
+- a weekly tidy-up
+- "replaced by" dates on facts
+- fast search across a large cortex
+- a browser dashboard
+- access from anywhere
+- Windows support
+
+The full list is in [ROADMAP.md](plugins/cortex/docs/ROADMAP.md). Inside Cortex, say "what's coming next" to see it, or "send feedback" to tell us what you want first.
 
 ## Three stages
 
@@ -194,4 +211,4 @@ If something here broke in your setup, open an issue. What people trip over shap
 
 ---
 
-Written by [Himanshu Shukla](https://thehimanshushukla.com). The reasoning behind each piece, with the real files and the numbers, is in the [Claude Code setup series](https://thehimanshushukla.com/blog/claude-code-setup-series). MIT licensed.
+Written by [Himanshu Shukla](https://thehimanshushukla.com). The reasoning behind each piece, with the real files and the numbers, is in the [Claude Code setup series](https://thehimanshushukla.com/blog/claude-code-setup-series). Licensed under Apache 2.0 - see [LICENSE](LICENSE) and [NOTICE](NOTICE).
