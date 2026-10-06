@@ -24,6 +24,16 @@ Explain and guide them, one step at a time:
 
 Run `python3 ~/.cortex/engine/scripts/cortex.py backup` so the current state is saved before anything changes. If it fails, stop and say why; do not upgrade without a saved copy.
 
+## 3b. One-time move to AGENTS.md (vaults set up before 0.3.0)
+
+If the vault has a `CLAUDE.md` that contains the `<!-- cortex:begin` marker, and no `AGENTS.md`:
+1. Show the person what will happen: "Your cortex instructions move to AGENTS.md so other coding tools (Codex, Cursor, Gemini) read them too. CLAUDE.md becomes a one-line pointer. Nothing in your own notes changes."
+2. On yes:
+   - Copy `CLAUDE.md` to `AGENTS.md` unchanged, so their own notes below the markers come along.
+   - Replace `CLAUDE.md` with the single line `@AGENTS.md`.
+   - Copy `~/.cortex/engine/templates/vault/GEMINI.md` into the vault if it is missing.
+3. Commit these files by name: `AGENTS.md`, `CLAUDE.md` and `GEMINI.md`.
+
 ## 4. Refresh the managed block in AGENTS.md
 
 - Read the vault `AGENTS.md` and the template `~/.cortex/engine/templates/vault/AGENTS.md`.
