@@ -72,7 +72,7 @@ If the path is inside iCloud Drive, Desktop/Documents with iCloud sync on, OneDr
 
 Ask: "Back it up to a private GitHub repository?" (recommended yes). Explain: "Every time you log, your pages are saved to a private copy on GitHub that only you can see. A weekly backup also runs every Sunday evening, in case anything was left behind."
 
-If yes, ask what to call the repository, with a suggestion they can accept: "What should the repository be called? Suggestion: `cortex` (only you will see it). Say 'ok' or type another name." Use exactly the name they give (lowercase, hyphens for spaces). Never pick the name yourself. Below, `<repo>` is that name.
+If yes, ask what to call the repository, with a suggestion they can accept: "I'll call the repository `<firstname>-cortex` (for example `dan-cortex`; only you will see it). Say 'ok' or give another name." Use exactly the name they give (lowercase, hyphens for spaces). Never pick the name yourself. Below, `<repo>` is that name.
 
 ## Step 5 - Show the full plan and wait for yes
 
