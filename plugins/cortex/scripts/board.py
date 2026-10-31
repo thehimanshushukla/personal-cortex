@@ -74,17 +74,12 @@ def make_id(*parts: str) -> str:
 
 
 def split_lines(text: str) -> list[list[str]]:
-    """[content, ending] per line; ending is '\\n', '\\r\\n' or '' so a join gives the exact text back."""
-    out = []
-    parts = text.split("\n")
-    for i, part in enumerate(parts):
-        last = i == len(parts) - 1
-        if last and part == "":
-            break
-        if not last and part.endswith("\r"):
-            out.append([part[:-1], "\r\n"])
-        else:
-            out.append([part, "" if last else "\n"])
+    """[content, ending] per line; ending is '\\n', '\\r\\n', a lone '\\r' (old Mac files) or '', so a
+    join gives the exact text back. The same breaks as read_page, so line numbers agree with the build."""
+    parts = re.split(r"(\r\n|\n|\r)", text)
+    out = [[parts[k], parts[k + 1]] for k in range(0, len(parts) - 1, 2)]
+    if parts[-1]:
+        out.append([parts[-1], ""])
     return out
 
 
@@ -161,20 +156,49 @@ def clip(text: str, n: int) -> str:
     return text if len(text) <= n else text[:n - 3] + "..."
 
 
-def task_prompt(t: dict, title: str, rel: str) -> str:
-    line = clip(t["raw"].strip(), 4000)
-    p = (f'About this item in my cortex: "{line}" (from {clip(str(title), 300)}, {clip(rel, 500)}; '
-         f'due {t["due"] or "no date"}; {t["owner"]} @{t["person"]}).\n'
-         "Read that page and the person page, then tell me: where does this stand, what is the next "
-         "step, and is anything missing? Do not change any file unless I say so.")
-    return p[:PROMPT_LIMIT]
+TASK_ASK = ("Read that page and the person page, then tell me: where does this stand, what is the next "
+            "step, and is anything missing? Do not change any file unless I say so.")
+INBOX_ASK = ("Read it, then propose where it belongs (area, thing, page type, tags, links) and wait for my "
+             "yes before moving or changing anything.")
 
 
-def inbox_prompt(rel: str, title: str) -> str:
-    p = (f'Help me file this note in my cortex: {clip(rel, 500)} ("{clip(str(title), 300)}").\n'
-         "Read it, then propose where it belongs (area, thing, page type, tags, links) and wait for my "
-         "yes before moving or changing anything.")
-    return p[:PROMPT_LIMIT]
+def encoded_link(prompt: str, vault: Path) -> str:
+    return ("claude://code/new?q=" + urllib.parse.quote(prompt, safe="")
+            + "&folder=" + urllib.parse.quote(str(vault), safe=""))
+
+
+def fit_prompt(build, fields: list[str], vault: Path) -> str:
+    """build(*fields) -> prompt. Shorten only the vault text - fields in order (task line, title,
+    path), each with a '...' marker - until the prompt is within PROMPT_LIMIT and the encoded link
+    within URL_LIMIT. The instruction part is never cut."""
+    fields = list(fields)
+
+    def fits(fs):
+        p = build(*fs)
+        return len(p) <= PROMPT_LIMIT and len(encoded_link(p, vault)) <= URL_LIMIT
+    for k in range(len(fields)):
+        if fits(fields):
+            break
+        whole = fields[k]
+        lo, hi = 0, len(whole)  # the longest kept prefix that fits
+        while lo < hi:
+            mid = (lo + hi + 1) // 2
+            lo, hi = (mid, hi) if fits(fields[:k] + [whole[:mid] + "..."] + fields[k + 1:]) else (lo, mid - 1)
+        fields[k] = whole[:lo] + "..."
+    return build(*fields)
+
+
+def task_prompt(t: dict, title: str, rel: str, vault: Path) -> str:
+    def build(line, title, rel):
+        return (f'About this item in my cortex: "{line}" (from {title}, {rel}; due {t["due"] or "no date"}; '
+                f'{t["owner"]} @{t["person"]}).\n' + TASK_ASK)
+    return fit_prompt(build, [t["raw"].strip(), str(title or rel), rel], vault)
+
+
+def inbox_prompt(rel: str, title: str, vault: Path) -> str:
+    def build(title, rel):
+        return f'Help me file this note in my cortex: {rel} ("{title}").\n' + INBOX_ASK
+    return fit_prompt(build, [str(title), rel], vault)
 
 
 def claude_link(prompt: str, vault: Path) -> str:
@@ -255,7 +279,10 @@ class Board:
                 out["problems"].append(f"could not read {p.rel} ({e}).")
                 continue
             digest, seen = sha(raw), {}
-            for idx, line in self.task_lines(p.rel, text):
+            found, note = self.scan(p.rel, text)
+            if note:
+                out["problems"].append(f"{p.rel}: {note}.")
+            for idx, line in found:
                 n = idx + 1
                 t = C.parse_task(line, me)
                 if not t:
@@ -273,21 +300,29 @@ class Board:
                     "owner": t["owner"], "todo": t["todo"], "mine": t["person"] in me, "due": t["due"],
                     "added": t["added"], "done": t["done"], "doing": t["doing"], "days_late": late,
                     "page_title": str(p.get("title") or p.rel), "page": p.rel, "area": str(p.get("area") or ""),
-                    "line_no": n, "line": line.strip(), "prompt": task_prompt(t, p.get("title"), p.rel)})
+                    "line_no": n, "line": line.strip(), "prompt": task_prompt(t, p.get("title"), p.rel, self.vault)})
         out["items"].sort(key=lambda i: (i["due"] or "9999", i["person"], i["text"]))
         out["inbox"] = self.inbox(out["problems"])
         return out
 
     def task_lines(self, rel: str, text: str):
         """(index, line) of the lines that can be tasks: the body, outside code fences - as the build sees it."""
+        return self.scan(rel, text)[0]
+
+    def scan(self, rel: str, text: str) -> tuple[list[tuple[int, str]], str]:
+        """Task-capable lines and the unclosed-code-block note ('' if none), as the build sees them."""
         page = C.read_page(self.vault / rel, self.vault, text)
+        if not page.meta:
+            return [], ""
         lines = [c for c, _ in split_lines(text)]
-        return list(C.task_lines(lines, getattr(page, "body_line", 1) - 1)) if page.meta else []
+        found, _ = C.scan_body(lines, getattr(page, "body_line", 1) - 1)
+        return found, C.unclosed_fence_note(page)
 
     def _inbox_row(self, kind: str, rel: str, title: str, **extra) -> dict:
         iid = make_id("inbox", kind, rel)
-        self.ids[iid] = ("inbox", rel, inbox_prompt(rel, title))
-        return dict(id=iid, rel=rel, title=title, prompt=inbox_prompt(rel, title), **extra)
+        prompt = inbox_prompt(rel, title, self.vault)
+        self.ids[iid] = ("inbox", rel, prompt)
+        return dict(id=iid, rel=rel, title=title, prompt=prompt, **extra)
 
     def inbox(self, problems: list[str]) -> dict:
         v = self.vault
@@ -490,7 +525,7 @@ class Board:
             raise Refused(404, "That item is not on the board any more. The page was reloaded.")
         rel = ref[1]
         if how == "claude":
-            prompt = task_prompt(C.parse_task(ref[2], self.me()), self._title(rel), rel) if ref[0] == "task" else ref[2]
+            prompt = task_prompt(C.parse_task(ref[2], self.me()), self._title(rel), rel, self.vault) if ref[0] == "task" else ref[2]
             ok, err = self.opener(claude_link(prompt, self.vault))
             return {"ok": ok, "message": "Claude is opening with the question filled in. Check it, then press send."
                     if ok else "Could not open Claude. Is the Claude desktop app installed? Copy prompt still works."}
@@ -700,17 +735,25 @@ def running(vault: Path) -> dict | None:
     return info if info and info["vault"] == str(vault) else None
 
 
-STOP_HINT = "python3 ~/.cortex/engine/scripts/cortex.py board --stop"
+def stop_command(vault: str | None = None) -> str:
+    """The exact command that closes the open board."""
+    import shlex
+    cmd = ["python3", str(Path(C.__file__).resolve())]
+    if vault:
+        cmd += ["--vault", vault]
+    return " ".join(shlex.quote(c) for c in cmd + ["board", "--stop"])
 
 
-def stop(vault: Path) -> int:
+def stop(vault: Path | None) -> int:
+    """Close the open board. With no usable vault folder (missing, or no setup) it stops whatever
+    board ~/.cortex/board.json names, so a broken setup never leaves one running."""
     info = open_board()
     if not info:
         print("No board is open.")
         return 0
-    if info["vault"] != str(vault):
-        print(f"The open board is for another cortex folder ({info['vault']}). Stop it with: "
-              f"python3 ~/.cortex/engine/scripts/cortex.py --vault \"{info['vault']}\" board --stop")
+    if vault is not None and vault.is_dir() and info["vault"] != str(vault):
+        print(f"The open board is for another cortex folder ({info['vault']}). Close it with:\n  "
+              + stop_command(info["vault"]))
         return 1
     os.kill(int(info["pid"]), signal.SIGTERM)
     for _ in range(50):
@@ -723,12 +766,16 @@ def stop(vault: Path) -> int:
 
 def run(args) -> int:
     import fcntl
+    if getattr(args, "stop", False):
+        try:
+            vault = C.vault_path(args.vault)
+        except SystemExit:
+            vault = None
+        return stop(vault)
     vault = C.vault_path(args.vault)
     if not vault.is_dir():
         print(f"could not read your cortex folder {vault} - it is not there. Say 'something is broken' in Claude.")
         return 1
-    if getattr(args, "stop", False):
-        return stop(vault)
     show = args.open and not args.no_browser
     info = running(vault)
     if info:
@@ -744,8 +791,13 @@ def run(args) -> int:
     try:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError:
-        print("Another board is open (or still starting) for a different cortex folder. Close it with:\n  "
-              + STOP_HINT + "\nthen ask again.")
+        other = open_board()
+        if other:
+            print(f"Another board is open for a different cortex folder ({other['vault']}). Close it with:\n  "
+                  + stop_command(other["vault"]) + "\nthen ask again.")
+        else:
+            print("Another board is still starting. Wait a moment and ask again, or close it with:\n  "
+                  + stop_command())
         return 1
     try:
         srv = BoardServer(Board(vault), args.port or 0)

@@ -294,6 +294,10 @@ def validate(pages: list[Page], vault: Path, people: set[str]) -> tuple[list[str
                     warnings.append(f"{p.rel}: '@{who} ... {{theirs}}' reads as owed to yourself - use {{mine}} for your own to-do")
                 elif re.match(r"^\s*-\s\[[ xX]\]\s+@", line) and not fm:
                     warnings.append(f"{p.rel}: follow-up line not in the standard shape: '{line.strip()[:80]}'")
+        if not p.errors:
+            note = unclosed_fence_note(p)
+            if note:
+                warnings.append(f"{p.rel}: {note}")
         for e in pe:
             errors.append(f"{p.rel}: {e}")
     by_id = {p.get("id"): p for p in pages if p.get("id")}
@@ -325,25 +329,56 @@ def parse_task(line: str, me: set[str] = frozenset({"me"})) -> dict | None:
             "todo": m.group("person") in me and m.group("owner") == "mine", "raw": line}
 
 
-FENCE_RE = re.compile(r"^\s*(`{3,}|~{3,})")
+FENCE_RE = re.compile(r"^(?P<indent>[ \t]*)(?P<fence>`{3,}|~{3,})(?P<rest>.*)$")
+LIST_ITEM_RE = re.compile(r"^[ \t]*(?:[-*+]|\d{1,9}[.)])(?:[ \t]|$)")
+TASKLIKE_RE = re.compile(r"^\s*-\s\[[ xX]\]\s+@")
 
 
-def task_lines(lines: list[str], start: int = 0):
-    """(index, line) for lines that can hold a task: from `start` (the body), outside fenced code
-    blocks. Build, validate and the board all scan through this, so they always agree."""
-    fence = ""
+def _indent(s: str) -> int:
+    return len(s.expandtabs(4))
+
+
+def scan_body(lines: list[str], start: int = 0) -> tuple[list[tuple[int, str]], int | None]:
+    """The lines that can hold a task - from `start` (the body), outside fenced code blocks - and the
+    index of a fence that is never closed (None if all close). CommonMark rules that matter here:
+    a backtick fence's info text has no backtick; an opener indented 4+ spaces is code, not a fence,
+    unless it sits inside a list item; a closer is the same character, at least as long, nothing after.
+    Build, validate and the board all scan through this, so they always agree."""
+    out, fence, opened, in_list = [], "", None, False
     for i, line in enumerate(lines):
         if i < start:
             continue
         m = FENCE_RE.match(line)
         if fence:
-            if m and m.group(1)[0] == fence[0] and len(m.group(1)) >= len(fence):
-                fence = ""
+            if m and m.group("fence")[0] == fence[0] and len(m.group("fence")) >= len(fence) \
+                    and not m.group("rest").strip():
+                fence, opened = "", None
             continue
-        if m:
-            fence = m.group(1)
+        if m and not (m.group("fence")[0] == "`" and "`" in m.group("rest")) \
+                and (_indent(m.group("indent")) < 4 or in_list):
+            fence, opened = m.group("fence"), i
             continue
-        yield i, line
+        if line.strip():
+            if LIST_ITEM_RE.match(line):
+                in_list = True
+            elif _indent(line) < 2:
+                in_list = False
+        out.append((i, line))
+    if fence and not any(TASKLIKE_RE.match(l) for l in lines[opened + 1:]):
+        opened = None  # nothing below it looks like a task, so nothing is hidden
+    return out, (opened if fence else None)
+
+
+def task_lines(lines: list[str], start: int = 0):
+    return iter(scan_body(lines, start)[0])
+
+
+def unclosed_fence_note(page: "Page") -> str:
+    """The warning for a code block that never closes and hides task lines, or ''."""
+    first = getattr(page, "body_line", 1)
+    _, opened = scan_body(page.body.split("\n"))
+    return (f"code block opened on line {first + opened} is never closed - task lines below it are not counted"
+            if opened is not None else "")
 
 
 def followups(pages: list[Page], me: set[str] = frozenset({"me"})) -> list[dict]:

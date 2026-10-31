@@ -30,9 +30,9 @@ The board is a page on this Mac only. It shows every task line in the cortex as 
 | Later | the due date is removed (a date more than a week away is kept) |
 | In progress | `{doing}` is added |
 | Waiting on others | `{theirs}` - not for the person's own to-dos (it asks who it is waiting on) |
+| Done | `- [x]` and `(done <today>)` |
 
 Only Waiting on others changes whose turn it is. Every other move keeps `{mine}` or `{theirs}` as it was, so "Alex owes me" never turns into "I owe Alex"; a card someone else owes stays in Waiting on others with its new date.
-| Done | `- [x]` and `(done <today>)` |
 
 Overdue is worked out from the date, so nothing can be dropped there. "Undo last change" puts the page back exactly as it was. Every write is checked like a log, and the card and follow-ups list are rebuilt right after.
 

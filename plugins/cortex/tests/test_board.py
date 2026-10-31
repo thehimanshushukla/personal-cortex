@@ -362,9 +362,21 @@ def test_prompt_encoding_round_trip(env, srv):
 
 
 def test_prompt_length_bound():
-    t = {"raw": "- [ ] @me " + "a%&#❤" * 6000, "due": "", "owner": "mine", "person": "me"}
-    p = B.task_prompt(t, "T" * 5000, "x/" * 1000)
-    assert len(p) < B.PROMPT_LIMIT and p.endswith("Do not change any file unless I say so.")
+    vault = Path("/Users/dan/my cortex")
+    t = {"raw": "- [ ] @me " + "a%&#\u2764" * 6000, "due": "", "owner": "mine", "person": "me"}
+    p = B.task_prompt(t, "T%" * 5000, "x/%" * 3000, vault)
+    link = B.encoded_link(p, vault)
+    assert len(p) <= B.PROMPT_LIMIT and len(link) <= B.URL_LIMIT and p.endswith(B.TASK_ASK)
+    assert '..." (from ' in p                                           # the task line shortened, marked
+    # escape-heavy text: the encoded link is the binding limit, and the instruction is still whole
+    t["raw"] = "%" * 20000
+    p = B.task_prompt(t, "Title", "a/b.md", vault)
+    assert len(B.encoded_link(p, vault)) <= B.URL_LIMIT and p.endswith(B.TASK_ASK) and "(from Title, a/b.md;" in p
+    t["raw"] = "short line"
+    assert B.task_prompt(t, "Title", "a/b.md", vault) == (
+        'About this item in my cortex: "short line" (from Title, a/b.md; due no date; mine @me).\n' + B.TASK_ASK)
+    ip = B.inbox_prompt("inbox/" + "%" * 20000 + ".md", "T", vault)
+    assert ip.endswith(B.INBOX_ASK) and len(B.encoded_link(ip, vault)) <= B.URL_LIMIT
     for text in ("%" * 20000, "a" * 20000, "\u2764\ufe0f&#\n" * 3000, "ok"):
         link = B.claude_link(text, Path("/Users/dan/my cortex"))
         assert len(link) <= B.URL_LIMIT
@@ -612,6 +624,87 @@ def test_stop_closes_the_board(env):
         assert r.returncode == 0 and "Board closed" in r.stdout
         assert p.wait(timeout=10) == 0
         assert "No board is open" in run(env, "board", "--stop").stdout
+    finally:
+        if p.poll() is None:
+            p.kill()
+
+
+# ---------------------------------------------------------------- re-check findings (0.4.0)
+
+@pytest.mark.parametrize("body,seen", [
+    ("```py`x\n- [ ] @me after fake fence {mine}\n", ["after fake fence"]),          # backtick in info: not a fence
+    ("    ```\n- [ ] @me after indented code {mine}\n", ["after indented code"]),   # 4+ spaces: code, not a fence
+    ("- [ ] @me item {mine}\n    ```\n    - [ ] @me in list fence {mine}\n    ```\n- [ ] @me after {mine}\n",
+     ["item", "after"]),                                                             # a fence inside a list item
+    ("~~~\n- [ ] @me hidden {mine}\n~~~ not a closer\n~~~\n- [ ] @me shown {mine}\n", ["shown"]),
+])
+def test_fence_rules(env, srv, body, seen):
+    seed(env, body)
+    assert sorted(i["text"] for i in state(srv)["items"]) == sorted(seen)
+    fu = (env["vault"] / "_cortex/followups.md")
+    assert run(env, "build").returncode == 0
+    assert sorted(t for t in seen if t in fu.read_text()) == sorted(seen)
+
+
+def test_unclosed_fence_warns_and_shows(env, srv):
+    s = seed(env, "- [ ] @me before {mine}\n```\n- [ ] @me swallowed {mine}\n")
+    n = lines_of(s).index("```") + 1
+    r = run(env, "build")
+    msg = f"code block opened on line {n} is never closed - task lines below it are not counted"
+    assert r.returncode == 0 and msg in r.stdout
+    st = state(srv)
+    assert [i["text"] for i in st["items"]] == ["before"] and any(msg in p for p in st["problems"])
+    s.write_text(s.read_text().replace("- [ ] @me swallowed {mine}\n", "no tasks here\n"))
+    assert "never closed" not in run(env, "build").stdout          # nothing hidden, nothing to say
+
+
+def test_lone_cr_line_endings_match_the_build(env, srv):
+    s = seed(env, "- [ ] @me first {mine}\n- [ ] @me second {mine}\n", newline="\r")
+    before = s.read_bytes()
+    st = state(srv)
+    items = C.followups(C.load_all(env["vault"])[0])
+    assert sorted((i["text"], i["line"]) for i in items) == sorted((i["text"], i["line_no"]) for i in st["items"])
+    assert move(srv, item(st, "second"), "doing")[0] == 200
+    after = s.read_bytes()
+    assert b"\n" not in after and after == before.replace(b"@me second {mine}", b"@me second {mine} {doing}")
+
+
+def test_skill_table_renders():
+    text = (SCRIPTS.parent / "skills/board/SKILL.md").read_text()
+    table = re.search(r"\| Moved to .*?\n\n", text, re.S).group(0)
+    assert all(l.startswith("|") for l in table.strip().splitlines()) and "| Done |" in table
+
+
+def test_stop_works_without_the_vault_folder(env):
+    seed(env, "- [ ] @me x {mine}\n")
+    p = subprocess.Popen([sys.executable, str(CORTEX), "board", "--no-browser"], stdout=subprocess.PIPE,
+                         stderr=subprocess.PIPE, text=True, env=env["env"])
+    try:
+        p.stdout.readline()
+        (env["home"] / ".cortex" / "config.json").write_text(json.dumps({"vault": str(env["home"] / "gone")}))
+        r = run(env, "board", "--stop")
+        assert r.returncode == 0 and "Board closed" in r.stdout
+        assert p.wait(timeout=10) == 0
+    finally:
+        if p.poll() is None:
+            p.kill()
+
+
+def test_busy_message_prints_the_exact_command(env, tmp_path):
+    seed(env, "- [ ] @me x {mine}\n")
+    other = tmp_path / "other vault"
+    other.mkdir()
+    p = subprocess.Popen([sys.executable, str(CORTEX), "--vault", str(other), "board", "--no-browser"],
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env["env"])
+    try:
+        p.stdout.readline()
+        r = run(env, "board", "--no-browser")
+        assert r.returncode == 1 and "different cortex folder" in r.stdout
+        cmd = r.stdout.splitlines()[1].strip()
+        assert "--vault" in cmd and cmd.endswith("board --stop")
+        import shlex
+        done = subprocess.run(shlex.split(cmd), capture_output=True, text=True, env=env["env"])
+        assert "Board closed" in done.stdout and p.wait(timeout=10) == 0
     finally:
         if p.poll() is None:
             p.kill()
