@@ -478,6 +478,7 @@ def test_unpushed_commits_flagged(env, tmp_path):
     "Meeting notes\n\n---\n\nmore\n",       # a divider line in an ordinary note
     "title: my idea for a book\nsome text\n",  # one key-looking line is not a header
     "---\n\nscribble\n",                      # a divider first, prose after
+    "---\nAgenda: budget, hiring\n- item\n",  # a divider then one key-like line
 ])
 def test_ordinary_notes_with_dividers_are_loose(env, text):
     seed(env)
@@ -492,3 +493,11 @@ def test_loose_note_with_task_lines_says_so(env):
     (env["vault"] / "acme" / "note.md").write_text("ideas\n- [ ] @me call the venue {mine}\n")
     r = run(env, "build")
     assert "1 task line(s) not counted until it has a header" in r.stdout
+
+
+def test_comment_first_in_header_is_still_a_page(env):
+    s, _ = seed(env)
+    p = Path(s["path"])
+    p.write_text(p.read_text().replace("---\n", "---\n# my comment\n", 1))
+    assert run(env, "build").returncode == 0
+    assert s["id"] in (env["vault"] / "_cortex/index.md").read_text()
