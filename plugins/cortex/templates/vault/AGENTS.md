@@ -1,4 +1,4 @@
-<!-- cortex:begin v0.3.1 - managed by the cortex plugin; upgrades rewrite only this block -->
+<!-- cortex:begin v0.4.0 - managed by the cortex plugin; upgrades rewrite only this block -->
 # How to work in this cortex
 
 This folder is a cortex: the person's working record, kept as markdown pages and backed up to their private GitHub. Every session starts from the card the start hook shows you. Use it - do not re-ask what it already says.
@@ -7,7 +7,7 @@ This folder is a cortex: the person's working record, kept as markdown pages and
 - One home per thing. Before creating a page, look in `_cortex/index.md` for an existing one; add to it instead of duplicating.
 - Create every page with `python3 ~/.cortex/engine/scripts/cortex.py new <type> ...` so its path, id and fields are right. Never invent ids.
 - Page types: session, decision (what and why), lesson (a trap and how to avoid it), insight, how-to, person, organisation, meeting, note. Rules for each are in the plugin's docs/SPEC.md.
-- Follow-ups (promises between the person and someone else) are lines: `- [ ] @person-slug what (due YYYY-MM-DD) {mine|theirs}`. The person's own to-dos use `@me`: `- [ ] @me what (due YYYY-MM-DD) {mine}`.
+- Follow-ups (promises between the person and someone else) are lines: `- [ ] @person-slug what (due YYYY-MM-DD) (added YYYY-MM-DD) {mine|theirs}`. The person's own to-dos use `@me`: `- [ ] @me what (due YYYY-MM-DD) (added YYYY-MM-DD) {mine}`. New lines get `(added <today>)`; a closed line gets `- [x]` and `(done <today>)`; `{doing}` after the owner means in progress. "show my board" opens them as cards.
 - A decision that only lives inside a session page is not captured - give it its own decision page.
 - After writing pages: `cortex.py check <files>`, then `cortex.py build`. Fix every problem before moving on.
 - Dates are local time (`date +%F`). Plain words, short sentences, plain hyphens.

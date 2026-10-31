@@ -19,8 +19,10 @@ Below, `cortex` means `python3 ~/.cortex/engine/scripts/cortex.py`. The vault pa
 Read `_cortex/followups.md`. Every follow-up came from a line shaped like this:
 
 ```
-- [ ] @<person-slug> <what> (due YYYY-MM-DD) {mine|theirs}
+- [ ] @<person-slug> <what> (due YYYY-MM-DD) (added YYYY-MM-DD) {mine|theirs}
 ```
+
+The dated parts are optional and can come in any order; a line on the board's In progress column also ends in `{doing}`.
 
 The build records the source file for each one. Group the list:
 
@@ -55,7 +57,7 @@ Number every line, so the person can refer to it by number.
 Ask: "Any of these done? Say the numbers, for example 'close 2 and 5'."
 
 **Only after the person confirms:**
-1. Open the source file, find that exact task line, and change `- [ ]` to `- [x]`.
+1. Open the source file, find that exact task line, change `- [ ]` to `- [x]` and add `(done <today>)` before the `{mine}`/`{theirs}`.
 2. Change nothing else on the line or in the page.
 3. Set `updated:` to today in that page's frontmatter.
 4. Run `cortex check <changed files>`, then `cortex build`.
@@ -63,7 +65,7 @@ Ask: "Any of these done? Say the numbers, for example 'close 2 and 5'."
 
 If the person wants to add a follow-up ("remind me Alex owes me the deck by Friday"):
 1. Ask which page it belongs on, suggesting the person's page or the latest meeting with them.
-2. Write one line in the exact shape above.
+2. Write one line in the exact shape above, with `(added <today>)`.
 3. Check, build and commit the same way.
 
 ## 4. Teaching note

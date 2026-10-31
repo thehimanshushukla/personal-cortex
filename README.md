@@ -66,9 +66,9 @@ The full list of what runs on its own, what you can ask for, and why each exists
 
 ## What's coming next
 
-The Cortex plugin is at an early version and grows from what its users ask for. Next up:
+The Cortex plugin is at an early version and grows from what its users ask for. New in 0.4.0: a board in your browser (say "show my board") with your to-dos and follow-ups as cards you can open, move and ask Claude about, plus an inbox of notes waiting for a home. Next up:
 - a reviewer agent: a second opinion on important documents before they go out
-- a task board and morning brief
+- a morning brief: what is due, what is waiting on others, what has gone quiet
 - an email and calendar sweep that proposes follow-ups for your approval
 - email drafts in your own voice
 

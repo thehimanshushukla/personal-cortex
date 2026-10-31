@@ -60,10 +60,11 @@ cortex new organisation --title "<Org name>"
   - **Links:** link back to the meeting id.
 - **Follow-ups:** one task line each in the meeting page's Follow-ups section, in exactly this shape:
   ```
-  - [ ] @<person-slug> <what> (due YYYY-MM-DD) {mine}
-  - [ ] @<person-slug> <what> {theirs}
+  - [ ] @<person-slug> <what> (due YYYY-MM-DD) (added YYYY-MM-DD) {mine}
+  - [ ] @<person-slug> <what> (added YYYY-MM-DD) {theirs}
   ```
   - `{mine}` means the person owes it. `{theirs}` means someone owes it to them.
+  - `(added ...)` is today's date (`date +%F`) on every new line, so the board knows how long it has been open.
   - Leave out `(due ...)` when no date was said. Never guess a date.
 - **People and organisation pages:**
   - Add a dated line under History, for example `- 2026-10-12: met at <meeting title> - <one line>`.

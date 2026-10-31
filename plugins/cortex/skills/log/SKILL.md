@@ -39,11 +39,11 @@ If something already has a page (a decision being changed, a person already know
 
 Line formats:
 ```
-- [ ] @alex-rivera send the roadmap doc (due 2026-10-15) {theirs}
-- [ ] @alex-rivera confirm the pilot dates (due 2026-10-20) {mine}
-- [ ] @me rehearse the talk with a timer (due 2026-10-26) {mine}
+- [ ] @alex-rivera send the roadmap doc (due 2026-10-15) (added 2026-10-08) {theirs}
+- [ ] @alex-rivera confirm the pilot dates (due 2026-10-20) (added 2026-10-08) {mine}
+- [ ] @me rehearse the talk with a timer (due 2026-10-26) (added 2026-10-08) {mine}
 ```
-`{mine}` = the person owes it; `{theirs}` = someone owes it to them. `@me` = the person's own to-do, never a promise to themselves under their own name. Close done ones as `- [x]`.
+`{mine}` = the person owes it; `{theirs}` = someone owes it to them. `@me` = the person's own to-do, never a promise to themselves under their own name. Every new line gets `(added <today>)` (today from `date +%F`), so the board knows how long it has been open. Close done ones as `- [x]` with `(done <today>)`. Leave existing lines as they are.
 
 ## 3. Write pages the right way
 

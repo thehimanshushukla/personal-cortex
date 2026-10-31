@@ -130,13 +130,18 @@ summary: One sentence that says what this page is.
 A follow-up is a task line in any page. It names a person, may name a date, and shows whose action it is:
 
 ```
-- [ ] @alex-rivera send the roadmap doc (due 2026-10-15) {theirs}
-- [ ] @sam-lee intro Acme marketing (due 2026-10-10) {mine}
+- [ ] @alex-rivera send the roadmap doc (due 2026-10-15) (added 2026-10-08) {theirs}
+- [ ] @sam-lee intro Acme marketing (due 2026-10-10) {mine} {doing}
+- [x] @me rehearse the talk (added 2026-10-01) (done 2026-10-09) {mine}
 ```
 
-- **`@slug`** must match a page under `people/`.
+- **`@slug`** must match a page under `people/`. `@me` (or the person's own slug) is their own to-do.
 - **`{mine}`** means the person owes it. **`{theirs}`** means someone owes it to them.
+- **Dated parts** after the text, all optional, in any order: `(due YYYY-MM-DD)`, `(added YYYY-MM-DD)` (written by log and debrief on every new line), `(done YYYY-MM-DD)`.
+- **`{doing}`**, optional, after `{mine|theirs}`: the item is in progress (the board's In progress column).
 - **`- [x]`** marks it closed.
+
+The board (`cortex.py board`) shows these lines as cards. A move edits only that one line; see the board skill for what each column writes.
 
 The build collects every open follow-up into `_cortex/followups.md`.
 

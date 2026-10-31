@@ -12,6 +12,7 @@ The one fact sheet about this plugin. Setup reads it to give the tour at the end
   - `_cortex/card.md`: the start card
   - `_cortex/followups.md`: everything owed, both ways
   - `_cortex/sorting-desk.md`: imports waiting for your decision
+  - `_cortex/trash/`: the page as it was before each board change (for Undo)
 
 ## 2. What runs on its own (hooks)
 
@@ -39,6 +40,8 @@ Say these in your own words. Exact phrases are not needed.
 | "get me up to speed on X" | A deep brief on a project, person or organisation from your pages. | Pick up anything in a minute. | "Get me up to speed" turned out to be about a quarter of the sessions the maker started. It was worth doing properly, every time. |
 | "show my card" | The start card, on demand. | A quick view of where things stand. | Same reason as the start card: no session should start from zero. |
 | "go through this meeting" (paste a transcript or give a file) | Creates a meeting page and decision pages. Writes follow-ups, updates people pages and drafts a follow-up email for you to send. | A meeting becomes actions and a record in minutes. | Turning a meeting into actions by hand was repeated in more than 15 sessions before it became a skill. |
+| "show my board" | Opens your board in the browser: every to-do and follow-up as a card in columns (Overdue, This week, Later, In progress, Waiting on others, Done). Drag a card, or use "Move to...", and the line on its page changes. Click a card to see its page, open it in Obsidian, or ask Claude about it. | See and move everything you owe and are owed, in one place. | Dan could see "3 overdue" on his card but could not open them or his follow-ups. The card counted them; nothing let him act on them. |
+| "open the inbox" | The board's Inbox tab: sorting-desk proposals, notes in `inbox/`, loose notes and pages not saved yet, each with Open file and Ask Claude ("help me file this note"). | Nothing waiting to be filed gets forgotten. | Imports and loose notes sat in folders where nobody looked; the card only gave a count. |
 | "what did I promise whom" | Every open follow-up by person, yours and theirs, overdue first. | Nothing slips. | Meeting items owned by other people kept turning into personal to-dos. Follow-ups now say whose they are: mine or theirs. |
 | "prep me for my call with X" | One page covering who they are, history, open items and three talking points. | You walk in prepared. | Built for this kit: everything needed is already in your pages, so a call never starts cold. |
 | "bring in this folder / my OneNote export / this deck" | Keeps the original file in `sources/` and turns each file into a note in `inbox/`. Then proposes where each note belongs (area, project, type, tags, links) on the sorting desk. | Old notes join your cortex in the right place instead of sitting idle. | Built for this kit: imported notes that land in one folder are rarely opened again. |
@@ -57,6 +60,7 @@ Say these in your own words. Exact phrases are not needed.
 
 - **Follow-ups** are promises between you and someone else: what you owe them, what they owe you.
 - **To-dos** are your own work (rehearse the talk, check a number). They are written with `@me` and shown apart on the card and in the follow-ups list, so your own list does not read as promises to yourself.
+- **On the board** each line is a card. A line can also carry `(added <date>)` (written when it is created), `(done <date>)` (when it is ticked) and `{doing}` (in progress). Moving a card changes only that one line, and "Undo last change" puts the page back as it was. The board is a page on this Mac only, opened with a secret key in its link, and it closes itself after 30 minutes without use.
 - **Loose notes** - a page with no header, such as an empty daily note Obsidian makes - no longer stop the build. The card counts them and the sorting desk lists them so you can give each a home.
 
 ## 5. Backup

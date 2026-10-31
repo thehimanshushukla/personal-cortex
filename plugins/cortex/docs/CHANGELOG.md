@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.0
+The board and inbox: say "show my board".
+- A page in your browser, on this Mac only, with every to-do and follow-up as a card in six columns: Overdue, This week, Later, In progress, Waiting on others, Done (last 7 days). Filter by area or person.
+- Move a card by dragging it or with "Move to..." on the card (keyboard works too). A move changes exactly that one line on its page: This week sets the due date to Friday, Later removes it, In progress adds `{doing}`, Waiting on others marks it `{theirs}`, Done ticks it and adds `(done <date>)`. "Undo last change" puts the page back exactly as it was.
+- Click a card to see its line, its page and the person, and to open it in Obsidian, open the file, or ask Claude about it (Claude opens with the question typed in; nothing is sent until you press send).
+- The Inbox tab lists sorting-desk proposals, notes in `inbox/`, loose notes (with how many task lines they hold) and pages not saved yet, each with Open file and Ask Claude.
+- Safe by design: the board only answers this Mac, needs the secret key in its link, never changes a line it cannot find exactly once ("this page changed - reloaded"), checks the page after every change and puts it back if the check fails, and rebuilds the card right after.
+- Task lines can carry `(added <date>)`, `(done <date>)` and `{doing}`. Log and debrief write `(added <date>)` on every new line. Existing lines work exactly as before.
+- The start card says "say 'show my board' to open them" next to overdue items.
+
 ## 0.3.1
 Fixes from the first weeks of real use:
 - The build no longer stops on AGENTS.md and GEMINI.md (every 0.3.0 cortex hit this).
