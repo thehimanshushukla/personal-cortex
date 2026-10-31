@@ -19,6 +19,8 @@ Commands:
   install-backup        weekly backup LaunchAgent (Sundays 18:00 local)
   feedback --type T --message M [--name N --email E --org O --contact yes|no] [--dry-run]
                         submit to the maker's feedback form (the skill shows it and asks first)
+  board [--open] [--port N] [--no-browser]
+                        the board and inbox page on this Mac only (scripts/board.py)
 """
 from __future__ import annotations
 
@@ -50,9 +52,13 @@ STATUSES = {"active", "done", "superseded", "archived", "draft"}
 REQUIRED = ["id", "title", "type", "status", "created", "updated", "summary"]
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+# A task line: - [ ] @person what (due D) (added D) (done D) {mine|theirs} {doing}
+# The dated parts are optional and in any order; {doing} is optional and comes last (0.4.0).
 FOLLOWUP_RE = re.compile(
-    r"^\s*-\s\[(?P<done>[ xX])\]\s+@(?P<person>[a-z0-9-]+)\s+(?P<text>.*?)"
-    r"(?:\s*\(due\s+(?P<due>\d{4}-\d{2}-\d{2})\))?\s*\{(?P<owner>mine|theirs)\}\s*$")
+    r"^(?P<indent>\s*)-\s\[(?P<done>[ xX])\]\s+@(?P<person>[a-z0-9-]+)\s+(?P<text>.*?)"
+    r"(?P<meta>(?:\s*\((?:due|added|done)\s+\d{4}-\d{2}-\d{2}\))*)"
+    r"\s*\{(?P<owner>mine|theirs)\}(?:\s*\{(?P<doing>doing)\})?(?P<trail>\s*)$")
+META_RE = re.compile(r"\((due|added|done)\s+(\d{4}-\d{2}-\d{2})\)")
 
 
 # ---------------------------------------------------------------- config / vault
@@ -111,7 +117,9 @@ def read_page(path: Path, vault: Path) -> Page:
         return Page(path, rel, {}, "", [f"cannot read file ({e})"])
     text = text.lstrip("\ufeff")  # Windows editors add a byte-order mark
     head = [l for l in text.splitlines()[:12] if l.strip()]
+    lead = 0  # lines dropped before the header, so task line numbers still match the file
     if head and head[0].strip() == "---" and len(head) > 1 and ANY_KEY_RE.match(head[1]):
+        lead = text[:len(text) - len(text.lstrip())].count("\n")
         text = text.lstrip()  # a real header after a blank line or a space
     if not text.startswith("---\n") or not (len(head) > 1 and ANY_KEY_RE.match(head[1])):
         # Looks like a header that lost its opening ---: two or more header keys before a --- line.
@@ -146,7 +154,9 @@ def read_page(path: Path, vault: Path) -> Page:
             errors.append(f"line {n}: '{key}' appears twice")
         meta[key] = parse_value(value)
     body = text[end + 4:].lstrip("\n")
-    return Page(path, rel, meta, body, errors)
+    page = Page(path, rel, meta, body, errors)
+    page.body_line = lead + text[:len(text) - len(body)].count("\n") + 1
+    return page
 
 
 def iter_pages(vault: Path):
@@ -291,25 +301,39 @@ def self_slugs(vault: Path) -> set[str]:
     return {"me"} | ({slugify(str(name))} if name else set())
 
 
+def parse_task(line: str, me: set[str] = frozenset({"me"})) -> dict | None:
+    """One task line, or None. Dates: due, added, done ('' when absent; the last one wins)."""
+    m = FOLLOWUP_RE.match(line)
+    if not m:
+        return None
+    dates = dict(META_RE.findall(m.group("meta")))
+    return {"person": m.group("person"), "text": m.group("text").strip(), "owner": m.group("owner"),
+            "closed": m.group("done") != " ", "due": dates.get("due", ""), "added": dates.get("added", ""),
+            "done": dates.get("done", ""), "doing": bool(m.group("doing")),
+            "todo": m.group("person") in me and m.group("owner") == "mine", "raw": line}
+
+
 def followups(pages: list[Page], me: set[str] = frozenset({"me"})) -> list[dict]:
     """Open task lines. A line I owe to myself (@me, or my own slug) is a to-do, not a follow-up:
     follow-ups are promises between people, to-dos are my own work."""
     out = []
     for p in pages:
-        for line in p.body.splitlines():
-            m = FOLLOWUP_RE.match(line)
-            if m and m.group("done") == " ":
-                out.append({"person": m.group("person"), "text": m.group("text").strip(),
-                            "due": m.group("due") or "", "owner": m.group("owner"),
-                            "todo": m.group("person") in me and m.group("owner") == "mine",
-                            "page": p.rel, "page_title": p.get("title")})
+        first = getattr(p, "body_line", 1)
+        for n, line in enumerate(p.body.split("\n")):
+            t = parse_task(line, me)
+            if t and not t["closed"]:
+                t.update(page=p.rel, page_title=p.get("title"), line=first + n)
+                out.append(t)
     return out
 
 
-def write_atomic(path: Path, text: str) -> None:
+def write_atomic(path: Path, text: str | bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(text, encoding="utf-8")
+    if isinstance(text, bytes):
+        tmp.write_bytes(text)
+    else:
+        tmp.write_text(text, encoding="utf-8")
     tmp.replace(path)
 
 
@@ -404,6 +428,9 @@ def render_card(pages: list[Page], items: list[dict], vault: Path) -> str:
         if not urgent:
             lines.append("- Nothing due in the next 7 days. Say 'what did I promise whom' for the full list.")
         lines.append("")
+    overdue = sum(1 for i in todos + items if i["due"] and i["due"] < now.isoformat())
+    if overdue:
+        lines += [f"{overdue} overdue - say 'show my board' to open them.", ""]
     inbox = list((vault / "inbox").glob("*.md")) if (vault / "inbox").exists() else []
     if inbox:
         lines += [f"Sorting desk: {len(inbox)} imported note(s) waiting. Say 'open the sorting desk'.", ""]
@@ -462,15 +489,38 @@ def loose_notes(vault: Path) -> list[str]:
     return [p.rel for p in iter_pages(vault) if getattr(p, "loose", False) and not p.rel.startswith("inbox/")]
 
 
-def cmd_build(args) -> int:
-    vault = vault_path(args.vault)
+def loose_task_count(vault: Path, rel: str) -> int:
+    """Open task lines in a loose note - not counted anywhere until the note has a header."""
+    try:
+        text = (vault / rel).read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return 0
+    return sum(1 for l in text.splitlines() if re.match(r"^\s*-\s\[ \]\s+@", l))
+
+
+def build_outputs(vault: Path):
+    """Validate, then write the generated files. Shared by 'build' and the board's write path.
+    Returns (pages, items, errors, warnings); nothing is written when there are errors."""
     pages, people = load_all(vault)
     errors, warnings = validate(pages, vault, people)
     for rel in loose_notes(vault):
-        tasks = sum(1 for l in (vault / rel).read_text(encoding="utf-8", errors="ignore").splitlines()
-                    if re.match(r"^\s*-\s\[ \]\s+@", l))
+        tasks = loose_task_count(vault, rel)
         extra = f"; {tasks} task line(s) not counted until it has a header" if tasks else ""
         warnings.append(f"{rel}: loose note (no header) - left for the sorting desk{extra}")
+    if errors:
+        return pages, [], errors, warnings
+    items = followups(pages, self_slugs(vault))
+    gen = vault / GENERATED
+    write_atomic(gen / "index.md", render_index(pages))
+    write_atomic(gen / "followups.md", render_followups(items))
+    write_atomic(gen / "card.md", render_card(pages, items, vault))
+    write_atomic(vault / "home.md", render_home(pages, vault))
+    return pages, items, errors, warnings
+
+
+def cmd_build(args) -> int:
+    vault = vault_path(args.vault)
+    pages, items, errors, warnings = build_outputs(vault)
     for w in warnings:
         print(f"note: {w}")
     if errors:
@@ -478,12 +528,6 @@ def cmd_build(args) -> int:
         for e in errors:
             print(f"  - {e}")
         return 1
-    items = followups(pages, self_slugs(vault))
-    gen = vault / GENERATED
-    write_atomic(gen / "index.md", render_index(pages))
-    write_atomic(gen / "followups.md", render_followups(items))
-    write_atomic(gen / "card.md", render_card(pages, items, vault))
-    write_atomic(vault / "home.md", render_home(pages, vault))
     todos = sum(1 for i in items if i["todo"])
     print(f"Build OK - {len(pages)} page(s), {len(items) - todos} open follow-up(s), {todos} to-do(s), {len(warnings)} note(s).")
     return 0
@@ -809,6 +853,12 @@ def cmd_feedback(args) -> int:
     return 0 if ok else 1
 
 
+def cmd_board(args) -> int:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import board
+    return board.run(args)
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="cortex")
     ap.add_argument("--vault")
@@ -827,6 +877,8 @@ def main(argv=None) -> int:
     f.add_argument("--type", choices=sorted(FEEDBACK_TYPES), required=True); f.add_argument("--message", required=True)
     f.add_argument("--name"); f.add_argument("--email"); f.add_argument("--org")
     f.add_argument("--contact", choices=["yes", "no"], default="yes"); f.add_argument("--dry-run", action="store_true")
+    bd = sub.add_parser("board"); bd.add_argument("--open", action="store_true")
+    bd.add_argument("--port", type=int, default=0); bd.add_argument("--no-browser", action="store_true")
     # --vault is accepted after the subcommand too (the LaunchAgent passes it that way)
     argv = list(sys.argv[1:] if argv is None else argv)
     if "--vault" in argv[1:]:
@@ -835,7 +887,7 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
     fn = {"build": cmd_build, "check": cmd_check, "card": cmd_card, "new": cmd_new, "backup": cmd_backup,
           "history": cmd_history, "sort-desk": cmd_sort_desk, "doctor": cmd_doctor,
-          "install-backup": cmd_install_backup, "feedback": cmd_feedback}[args.cmd]
+          "install-backup": cmd_install_backup, "feedback": cmd_feedback, "board": cmd_board}[args.cmd]
     return fn(args)
 
 

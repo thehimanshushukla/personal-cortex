@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cortex board</title>
+<style>
+:root {
+  --bg: #f7f6f2; --panel: #ffffff; --ink: #1f2328; --muted: #57606a; --line: #d8d4ca;
+  --accent: #2f5d8a; --accent-ink: #ffffff; --late: #9a3412; --late-bg: #fff3ea;
+  --ok: #1f6f43; --ok-bg: #eaf6ee; --warn-bg: #fff8e1; --warn: #7a4d00; --focus: #f2a33a;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); }
+body { font: 18px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+header { padding: 16px 20px 8px; display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; }
+h1 { font-size: 26px; margin: 0; font-weight: 650; }
+.tabs { display: flex; gap: 6px; }
+.tabs button, .btn, select { font: inherit; border-radius: 10px; border: 1px solid var(--line);
+  background: var(--panel); color: var(--ink); padding: 8px 14px; min-height: 44px; cursor: pointer; }
+.tabs button[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn:disabled { opacity: .5; cursor: default; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.bar { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; padding: 0 20px 12px; }
+.bar label { color: var(--muted); font-size: 16px; display: flex; gap: 8px; align-items: center; }
+#msg { margin: 0 20px 12px; padding: 12px 16px; border-radius: 10px; background: var(--warn-bg);
+  color: var(--warn); display: none; }
+#msg.show { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+#msg.good { background: var(--ok-bg); color: var(--ok); }
+.problems { margin: 0 20px 12px; padding: 12px 16px; border-radius: 10px; background: var(--late-bg); color: var(--late); }
+.problems ul { margin: 6px 0 0; padding-left: 20px; }
+main { padding: 0 20px 40px; }
+.board { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(min(270px, 100%), 1fr)); align-items: start; }
+.col { background: #efece4; border-radius: 14px; padding: 12px; min-height: 120px; border: 2px solid transparent; }
+.col h2 { font-size: 19px; margin: 2px 4px 10px; display: flex; justify-content: space-between; }
+.col h2 .n { color: var(--muted); font-weight: 500; }
+.col.over { border-color: var(--accent); background: #e4ecf4; }
+.col.nodrop.over { border-color: var(--late); background: var(--late-bg); }
+.col .hint { color: var(--muted); font-size: 15px; margin: 0 4px 8px; }
+.col.overdue h2 { color: var(--late); }
+.empty { color: var(--muted); font-size: 16px; padding: 6px 4px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 12px 10px;
+  margin-bottom: 10px; cursor: pointer; }
+.card:hover { border-color: #b9b3a4; }
+.card.dragging { opacity: .5; }
+.card .text { font-size: 18px; margin: 0 0 6px; overflow-wrap: anywhere; }
+.card .meta { display: flex; flex-wrap: wrap; gap: 6px 10px; font-size: 15px; color: var(--muted); margin-bottom: 8px; }
+.chip { background: #f0eee8; border-radius: 999px; padding: 1px 10px; }
+.chip.late { background: var(--late-bg); color: var(--late); font-weight: 600; }
+.chip.doing { background: #e4ecf4; color: var(--accent); }
+.card select { width: 100%; font-size: 16px; min-height: 40px; padding: 6px 10px; }
+.inbox section { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; margin-bottom: 14px; }
+.inbox h2 { font-size: 20px; margin: 0 0 4px; }
+.inbox .why { color: var(--muted); font-size: 16px; margin: 0 0 10px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: space-between;
+  border-top: 1px solid #ece8de; padding: 10px 0; }
+.row .what { flex: 1 1 260px; overflow-wrap: anywhere; }
+.row .path { color: var(--muted); font-size: 15px; display: block; }
+.row .acts { display: flex; gap: 8px; flex-wrap: wrap; }
+#drawer { position: fixed; top: 0; right: 0; height: 100%; width: min(560px, 100%); background: var(--panel);
+  box-shadow: -6px 0 24px rgba(0,0,0,.12); padding: 18px 20px 30px; overflow-y: auto; display: none; z-index: 10; }
+#drawer.open { display: block; }
+#drawer h2 { font-size: 22px; margin: 0 40px 6px 0; }
+#drawer .close { position: absolute; top: 14px; right: 14px; }
+#drawer .line { font-family: ui-monospace, Menlo, monospace; font-size: 15px; background: #f4f2ec;
+  border-radius: 8px; padding: 10px; overflow-wrap: anywhere; white-space: pre-wrap; }
+#drawer dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; font-size: 16px; }
+#drawer dt { color: var(--muted); }
+#drawer dd { margin: 0; overflow-wrap: anywhere; }
+#drawer .acts { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
+#drawer pre { white-space: pre-wrap; overflow-wrap: anywhere; font: 15px/1.5 ui-monospace, Menlo, monospace;
+  background: #faf9f6; border: 1px solid #ece8de; border-radius: 8px; padding: 10px; }
+#shade { position: fixed; inset: 0; background: rgba(0,0,0,.18); display: none; z-index: 9; }
+#shade.open { display: block; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+@media (max-width: 600px) { body { font-size: 17px; } header, .bar, main { padding-left: 12px; padding-right: 12px; }
+  #msg, .problems { margin-left: 12px; margin-right: 12px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Your board</h1>
+  <div class="tabs" role="tablist">
+    <button id="tab-board" role="tab" aria-selected="true" aria-controls="board-view">Board</button>
+    <button id="tab-inbox" role="tab" aria-selected="false" aria-controls="inbox-view">Inbox</button>
+  </div>
+</header>
+<div class="bar">
+  <label id="f-area-l">Area <select id="f-area"><option value="">All areas</option></select></label>
+  <label id="f-person-l">Person <select id="f-person"><option value="">Everyone</option></select></label>
+  <button class="btn" id="refresh">Refresh</button>
+  <button class="btn" id="undo">Undo last change</button>
+</div>
+<div id="msg" role="status" aria-live="polite"></div>
+<div id="problems"></div>
+<main>
+  <div id="board-view" role="tabpanel" aria-labelledby="tab-board"><div class="board" id="board"></div></div>
+  <div id="inbox-view" role="tabpanel" aria-labelledby="tab-inbox" class="inbox" hidden></div>
+</main>
+<div id="shade"></div>
+<aside id="drawer" role="dialog" aria-modal="true" aria-labelledby="d-title" tabindex="-1"></aside>
+<script>
+(function () {
+  "use strict";
+  // Every piece of text from the cortex goes through textContent; the page never builds HTML from strings.
+  var state = null, current = null, lastFocus = null, dragId = null;
+  var filters = { area: "", person: "" };
+  try { if (location.search) history.replaceState(null, "", "/"); } catch (e) {}
+
+  function el(tag, attrs, kids) {
+    var n = document.createElement(tag);
+    Object.keys(attrs || {}).forEach(function (k) {
+      if (k === "text") n.textContent = attrs[k];
+      else if (k === "cls") n.className = attrs[k];
+      else if (k.slice(0, 2) === "on") n.addEventListener(k.slice(2), attrs[k]);
+      else n.setAttribute(k, attrs[k]);
+    });
+    (kids || []).forEach(function (c) { if (c) n.appendChild(c); });
+    return n;
+  }
+  function $(id) { return document.getElementById(id); }
+
+  function say(text, good, undo) {
+    var m = $("msg");
+    m.textContent = "";
+    m.className = "show" + (good ? " good" : "");
+    m.appendChild(el("span", { text: text }));
+    if (undo) m.appendChild(el("button", { cls: "btn", text: "Undo", onclick: doUndo }));
+    clearTimeout(say.t);
+    say.t = setTimeout(function () { m.className = ""; }, good ? 6000 : 12000);
+  }
+
+  function api(method, path, body) {
+    var opts = { method: method, headers: {}, credentials: "same-origin" };
+    if (body) { opts.headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(body); }
+    return fetch(path, opts).then(function (r) {
+      return r.json().catch(function () { return { ok: false, message: "could not read the answer from the board." }; })
+        .then(function (j) { j.status = r.status; return j; });
+    }, function () { return { ok: false, status: 0, message: "The board has closed (it closes after 30 minutes without use). Say 'show my board' to open it again." }; });
+  }
+
+  function load(note) {
+    return api("GET", "/api/state").then(function (s) {
+      if (s.status !== 200) { showProblems([s.message || "could not read your cortex."]); return; }
+      state = s;
+      fillFilters();
+      showProblems(s.problems || []);
+      render();
+      if (note) say(note, false);
+    });
+  }
+
+  function showProblems(list) {
+    var box = $("problems");
+    box.textContent = "";
+    if (!list.length) return;
+    var ul = el("ul");
+    list.forEach(function (p) { ul.appendChild(el("li", { text: p })); });
+    box.appendChild(el("div", { cls: "problems" }, [el("strong", { text: "Some of your cortex could not be read:" }), ul]));
+  }
+
+  function fillFilters() {
+    [["f-area", "area", "All areas"], ["f-person", "person", "Everyone"]].forEach(function (f) {
+      var sel = $(f[0]), seen = {};
+      state.items.forEach(function (i) { var v = f[1] === "person" ? i.person : i.area; if (v) seen[v] = 1; });
+      sel.textContent = "";
+      sel.appendChild(el("option", { value: "", text: f[2] }));
+      Object.keys(seen).sort().forEach(function (v) {
+        sel.appendChild(el("option", { value: v, text: f[1] === "person" ? "@" + v : v }));
+      });
+      if (!seen[filters[f[1]]]) filters[f[1]] = "";
+      sel.value = filters[f[1]];
+    });
+  }
+
+  function niceDate(iso) {
+    var d = new Date(iso + "T12:00:00");
+    if (isNaN(d)) return iso;
+    return d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+  }
+
+  function cardFor(i) {
+    var meta = el("div", { cls: "meta" });
+    meta.appendChild(el("span", { cls: "chip", text: i.mine ? "My to-do" : (i.owner === "theirs" ? "@" + i.person + " owes me" : "I owe @" + i.person) }));
+    if (i.column === "overdue") meta.appendChild(el("span", { cls: "chip late", text: i.days_late + (i.days_late === 1 ? " day late" : " days late") }));
+    else if (i.column === "done" && i.done) meta.appendChild(el("span", { text: "done " + niceDate(i.done) }));
+    else if (i.due) meta.appendChild(el("span", { text: "due " + niceDate(i.due) }));
+    if (i.doing && i.column !== "doing") meta.appendChild(el("span", { cls: "chip doing", text: "in progress" }));
+    meta.appendChild(el("span", { text: i.page_title }));
+    var sel = el("select", { "aria-label": "Move to" });
+    sel.appendChild(el("option", { value: "", text: "Move to..." }));
+    state.columns.forEach(function (c) {
+      if (c.droppable && c.key !== i.column) sel.appendChild(el("option", { value: c.key, text: c.title }));
+    });
+    var card = el("div", { cls: "card", tabindex: "0", draggable: "true", role: "button",
+      "aria-label": (i.text || i.line) + ". Press Enter for details." }, [
+      el("p", { cls: "text", text: i.text || i.line }), meta, sel]);
+    // A select inside a draggable card: switch dragging off while it is in use, so a tap or
+    // click on the menu never starts (or cancels) a drag.
+    ["pointerdown", "mousedown", "touchstart", "focus"].forEach(function (ev) {
+      sel.addEventListener(ev, function (e) { e.stopPropagation(); card.draggable = false; }, { passive: true });
+    });
+    sel.addEventListener("blur", function () { card.draggable = true; });
+    sel.addEventListener("click", function (e) { e.stopPropagation(); });
+    sel.addEventListener("keydown", function (e) { e.stopPropagation(); });
+    sel.addEventListener("change", function () { if (sel.value) move(i, sel.value); });
+    card.addEventListener("click", function () { openDrawer(i); });
+    card.addEventListener("keydown", function (e) {
+      if (e.target === card && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openDrawer(i); }
+    });
+    card.addEventListener("dragstart", function (e) {
+      dragId = i.id; card.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move";
+      try { e.dataTransfer.setData("text/plain", i.id); } catch (x) {}
+    });
+    card.addEventListener("dragend", function () { card.classList.remove("dragging"); dragId = null; });
+    return card;
+  }
+
+  function visible(i) {
+    return (!filters.area || i.area === filters.area) && (!filters.person || i.person === filters.person);
+  }
+
+  function render() {
+    var board = $("board");
+    board.textContent = "";
+    if (!state.ok) {
+      board.appendChild(el("p", { cls: "empty", text: "The board could not be shown. See the message above." }));
+      return;
+    }
+    state.columns.forEach(function (c) {
+      var items = state.items.filter(function (i) { return i.column === c.key && visible(i); });
+      var col = el("section", { cls: "col " + c.key + (c.droppable ? "" : " nodrop"), "aria-label": c.title }, [
+        el("h2", {}, [el("span", { text: c.title }), el("span", { cls: "n", text: String(items.length) })])]);
+      if (!c.droppable) col.appendChild(el("p", { cls: "hint", text: "Worked out from the date. Move a card to This week or Later to change it." }));
+      if (!items.length) col.appendChild(el("p", { cls: "empty", text: c.key === "overdue" ? "Nothing overdue." : "Nothing here." }));
+      items.forEach(function (i) { col.appendChild(cardFor(i)); });
+      col.addEventListener("dragover", function (e) {
+        if (!dragId) return;
+        col.classList.add("over");
+        // Overdue takes the drop too, only to explain why nothing moved.
+        e.preventDefault(); e.dataTransfer.dropEffect = "move";
+      });
+      col.addEventListener("dragleave", function (e) { if (!col.contains(e.relatedTarget)) col.classList.remove("over"); });
+      col.addEventListener("drop", function (e) {
+        e.preventDefault(); col.classList.remove("over");
+        var it = state.items.filter(function (x) { return x.id === dragId; })[0];
+        if (it && it.column !== c.key) move(it, c.key);
+      });
+      board.appendChild(col);
+    });
+    if (!state.items.length && !(state.problems || []).length) {
+      say("Nothing open yet. Lines like '- [ ] @me book the room {mine}' on your pages show up here.", true);
+    }
+    renderInbox();
+  }
+
+  function move(i, to) {
+    var col = state.columns.filter(function (c) { return c.key === to; })[0];
+    if (to === "overdue") { say("Overdue comes from the date. Move it to This week or Later to change the date."); return; }
+    api("POST", "/api/move", { id: i.id, sha: i.sha, to: to }).then(function (r) {
+      if (r.status === 200 && r.ok) {
+        closeDrawer();
+        load().then(function () { say(r.message === "Saved." ? "Moved to " + col.title + "." : r.message, true, r.undo); });
+      } else if (r.status === 409 || r.status === 404) {
+        closeDrawer(); load(r.message || "This page changed - reloaded.");
+      } else {
+        load().then(function () { say(r.message || "That move did not work."); });
+      }
+    });
+  }
+
+  function doUndo() {
+    api("POST", "/api/undo", {}).then(function (r) {
+      closeDrawer();
+      load().then(function () { say(r.message || "Undo did not work.", r.ok); });
+    });
+  }
+
+  function openThing(id, how) {
+    api("POST", "/api/open", { id: id, how: how }).then(function (r) { say(r.message || "Could not open it.", r.ok); });
+  }
+
+  function copy(text) {
+    function fallback() {
+      var t = el("textarea", { "aria-hidden": "true" });
+      t.value = text; t.style.position = "fixed"; t.style.opacity = "0";
+      document.body.appendChild(t); t.select();
+      var ok = false; try { ok = document.execCommand("copy"); } catch (e) {}
+      t.remove();
+      say(ok ? "Prompt copied. Paste it into Claude." : "Could not copy. Select the text and copy it yourself.", ok);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { say("Prompt copied. Paste it into Claude.", true); }, fallback);
+    } else fallback();
+  }
+
+  function openDrawer(i) {
+    current = i; lastFocus = document.activeElement;
+    var d = $("drawer");
+    d.textContent = "";
+    d.appendChild(el("button", { cls: "btn close", text: "Close", onclick: closeDrawer }));
+    d.appendChild(el("h2", { id: "d-title", text: i.text || i.line }));
+    d.appendChild(el("div", { cls: "line", text: i.line }));
+    var who = i.mine ? "My to-do" : (i.owner === "theirs" ? "@" + i.person + " owes me" : "I owe @" + i.person);
+    var dl = el("dl", {}, [
+      el("dt", { text: "Page" }), el("dd", { text: i.page_title }),
+      el("dt", { text: "File" }), el("dd", { text: i.page + " (line " + i.line_no + ")" }),
+      el("dt", { text: "Person" }), el("dd", { text: who }),
+      el("dt", { text: "Due" }), el("dd", { text: i.due ? niceDate(i.due) : "no date" })]);
+    if (i.added) { dl.appendChild(el("dt", { text: "Added" })); dl.appendChild(el("dd", { text: niceDate(i.added) })); }
+    d.appendChild(dl);
+    var acts = el("div", { cls: "acts" }, [
+      el("button", { cls: "btn primary", text: "Ask Claude", onclick: function () { openThing(i.id, "claude"); } }),
+      el("button", { cls: "btn", text: "Copy prompt", onclick: function () { copy(i.prompt); } }),
+      el("button", { cls: "btn", text: "Open in Obsidian", onclick: function () { openThing(i.id, "obsidian"); } }),
+      el("button", { cls: "btn", text: "Open file", onclick: function () { openThing(i.id, "file"); } }),
+      i.column === "done" ? null : el("button", { cls: "btn", text: "Mark done", onclick: function () { move(i, "done"); } }),
+      el("button", { cls: "btn", text: "Undo last change", onclick: doUndo })]);
+    d.appendChild(acts);
+    var body = el("div", {}, [el("p", { cls: "empty", text: "Loading the page..." })]);
+    d.appendChild(body);
+    d.classList.add("open"); $("shade").classList.add("open");
+    d.focus();
+    api("GET", "/api/item?id=" + encodeURIComponent(i.id)).then(function (r) {
+      if (current !== i) return;
+      body.textContent = "";
+      if (r.status !== 200) { body.appendChild(el("p", { text: r.message || "could not read the page." })); return; }
+      body.appendChild(el("h3", { text: "The page" }));
+      body.appendChild(el("pre", { text: r.page_text }));
+      if (r.person_page) {
+        body.appendChild(el("h3", { text: "The person (" + r.person_page + ")" }));
+        body.appendChild(el("pre", { text: r.person_text }));
+      }
+    });
+  }
+
+  function closeDrawer() {
+    if (!current) return;
+    current = null;
+    $("drawer").classList.remove("open"); $("shade").classList.remove("open");
+    if (lastFocus && document.body.contains(lastFocus)) lastFocus.focus();
+  }
+
+  function renderInbox() {
+    var v = $("inbox-view"), ib = state.inbox;
+    v.textContent = "";
+    if (!ib) return;
+    var groups = [
+      ["desk", "Proposals on the sorting desk", "Where Claude suggests each imported note should go. Say 'open the sorting desk' in Claude to accept or change them.",
+        function (r) { return "#" + r.n + " " + r.title + (r.where ? " - to " + r.where : "") + (r.type ? " (" + r.type + ")" : ""); }],
+      ["notes", "Notes in inbox/", "Imported notes waiting for a home.", function (r) { return r.title; }],
+      ["loose", "Loose notes", "Pages with no header. Tasks in them are not on the board until they get one.",
+        function (r) { return r.title + (r.tasks ? " - " + r.tasks + " task line(s) not counted" : ""); }],
+      ["unsaved", "Pages not saved yet", "Changed on this Mac but not yet saved to your backup. Say 'back up my cortex' in Claude.",
+        function (r) { return r.title + " (" + r.status + ")"; }]];
+    var total = 0;
+    groups.forEach(function (g) {
+      var rows = ib[g[0]] || [];
+      if (g[0] === "unsaved" && !ib.git) return;
+      total += rows.length;
+      if (!rows.length) return;
+      var s = el("section", {}, [el("h2", { text: g[1] + " (" + rows.length + ")" }), el("p", { cls: "why", text: g[2] })]);
+      rows.forEach(function (r) {
+        s.appendChild(el("div", { cls: "row" }, [
+          el("div", { cls: "what" }, [el("span", { text: g[3](r) }), el("span", { cls: "path", text: r.rel })]),
+          el("div", { cls: "acts" }, [
+            el("button", { cls: "btn", text: "Open file", onclick: function () { openThing(r.id, "file"); } }),
+            el("button", { cls: "btn primary", text: "Ask Claude", onclick: function () { openThing(r.id, "claude"); } }),
+            el("button", { cls: "btn", text: "Copy prompt", onclick: function () { copy(r.prompt); } })])]));
+      });
+      v.appendChild(s);
+    });
+    if (!total) v.appendChild(el("section", {}, [el("h2", { text: "Your inbox is empty" }),
+      el("p", { cls: "why", text: "Nothing is waiting to be filed or saved." })]));
+    $("tab-inbox").textContent = "Inbox" + (total ? " (" + total + ")" : "");
+  }
+
+  function showTab(which) {
+    var board = which === "board";
+    $("tab-board").setAttribute("aria-selected", String(board));
+    $("tab-inbox").setAttribute("aria-selected", String(!board));
+    $("board-view").hidden = !board; $("inbox-view").hidden = board;
+    $("f-area-l").hidden = !board; $("f-person-l").hidden = !board;
+    try { localStorage.setItem("cortex-board-tab", which); } catch (e) {}
+  }
+
+  $("tab-board").addEventListener("click", function () { showTab("board"); });
+  $("tab-inbox").addEventListener("click", function () { showTab("inbox"); });
+  $("f-area").addEventListener("change", function (e) { filters.area = e.target.value; render(); });
+  $("f-person").addEventListener("change", function (e) { filters.person = e.target.value; render(); });
+  $("refresh").addEventListener("click", function () { load().then(function () { say("Up to date.", true); }); });
+  $("undo").addEventListener("click", doUndo);
+  $("shade").addEventListener("click", closeDrawer);
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeDrawer(); });
+  document.addEventListener("visibilitychange", function () { if (!document.hidden && !current) load(); });
+  try { if (localStorage.getItem("cortex-board-tab") === "inbox") showTab("inbox"); } catch (e) {}
+  load();
+})();
+</script>
+</body>
+</html>
