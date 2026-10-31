@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.1
+Fixes from the first weeks of real use:
+- The build no longer stops on AGENTS.md and GEMINI.md (every 0.3.0 cortex hit this).
+- Notes with no header (empty Obsidian daily notes, scribbles) no longer stop the build; the card counts them and the sorting desk lists them.
+- Your own to-dos (`@me`) are kept apart from follow-ups with other people. Lines written under your own name before this update are treated as to-dos too, nothing to redo.
+- Logging saves every page it wrote, even where the hooks did not run (a Claude chat). The start card shows pages written but not yet saved to GitHub.
+- Logging asks about every person and organisation that acted in the session, so people pages fill in.
+- Setup writes the real kit version (it stayed at 0.1.0 before).
+
 ## 0.3.0
 Works in Codex too: Codex plugin manifest and marketplace, hooks handle Codex file edits (apply_patch). The cortex's instructions now live in AGENTS.md (CLAUDE.md and GEMINI.md point to it). Skills use a stable engine copy at ~/.cortex/engine, so they work in any tool.
 

@@ -308,3 +308,63 @@ def test_engine_synced_to_stable_path(env):
     eng = env["home"] / ".cortex/engine"
     assert (eng / "scripts/cortex.py").exists() and (eng / "templates/vault/AGENTS.md").exists()
     assert (eng / "docs/WHAT-YOU-HAVE.md").exists()
+
+
+# ---------------------------------------------------------------- 0.3.1: found in the first real user's cortex
+
+def test_root_instruction_files_are_not_pages(env):
+    seed(env)
+    for f in ("AGENTS.md", "GEMINI.md", "CLAUDE.md"):
+        (env["vault"] / f).write_text("@AGENTS.md\n" if f != "AGENTS.md" else "# How to work\n")
+    r = run(env, "build")
+    assert r.returncode == 0, r.stdout
+
+
+def test_loose_notes_warn_not_block(env):
+    seed(env)
+    (env["vault"] / "2026-10-25.md").write_text("")  # empty daily note made by Obsidian
+    (env["vault"] / "acme" / "scribble.md").write_text("just some text, no header\n")
+    r = run(env, "build")
+    assert r.returncode == 0, r.stdout
+    assert "loose note" in r.stdout
+    card = (env["vault"] / "_cortex/card.md").read_text()
+    assert "Loose notes: 2" in card
+    desk = run(env, "sort-desk").stdout
+    assert "2026-10-25.md" in desk and "acme/scribble.md" in desk
+    # a real page with a broken header still stops the build
+    (env["vault"] / "acme" / "broken.md").write_text("---\nid: x\n")
+    assert run(env, "build").returncode == 1
+
+
+def test_own_actions_are_todos_not_followups(env):
+    s, _ = seed(env)
+    (env["vault"] / "kit.yaml").write_text("name: Alex Rivera\n")
+    path = Path(s["path"])
+    path.write_text(path.read_text()
+                    + "\n- [ ] @alex-rivera rehearse with a timer (due 2020-01-01) {mine}\n"
+                    + "- [ ] @me book the room {mine}\n"
+                    + "- [ ] @alex-rivera send roadmap {theirs}\n")
+    r = run(env, "build")
+    assert r.returncode == 0, r.stdout
+    fu = (env["vault"] / "_cortex/followups.md").read_text()
+    assert "## My to-dos (2)" in fu and "rehearse with a timer" in fu and "book the room" in fu
+    assert "## I owe (0)" in fu
+    card = (env["vault"] / "_cortex/card.md").read_text()
+    assert "To-dos (2 open)" in card and "OVERDUE: rehearse with a timer" in card
+    assert "I owe @alex-rivera" not in card
+
+
+def test_template_kit_version_is_filled_by_setup(env):
+    kit = (CORTEX.parent.parent / "templates" / "vault" / "kit.yaml").read_text()
+    assert "kit_version: {{kit_version}}" in kit
+
+
+def test_start_card_flags_unsaved_pages(env):
+    seed(env)
+    assert run(env, "build").returncode == 0
+    r = hook(env, "session-start", {"session_id": "s1"})
+    assert "not saved to GitHub yet" in r.stdout
+    subprocess.run(["git", "-C", str(env["vault"]), "add", "-A"], check=True)
+    subprocess.run(["git", "-C", str(env["vault"]), "commit", "-qm", "x"], check=True)
+    r = hook(env, "session-start", {"session_id": "s2"})
+    assert "not saved to GitHub yet" not in r.stdout

@@ -7,7 +7,7 @@ This folder is a cortex: the person's working record, kept as markdown pages and
 - One home per thing. Before creating a page, look in `_cortex/index.md` for an existing one; add to it instead of duplicating.
 - Create every page with `python3 ~/.cortex/engine/scripts/cortex.py new <type> ...` so its path, id and fields are right. Never invent ids.
 - Page types: session, decision (what and why), lesson (a trap and how to avoid it), insight, how-to, person, organisation, meeting, note. Rules for each are in the plugin's docs/SPEC.md.
-- Follow-ups are task lines: `- [ ] @person-slug what (due YYYY-MM-DD) {mine|theirs}`.
+- Follow-ups (promises between the person and someone else) are lines: `- [ ] @person-slug what (due YYYY-MM-DD) {mine|theirs}`. The person's own to-dos use `@me`: `- [ ] @me what (due YYYY-MM-DD) {mine}`.
 - A decision that only lives inside a session page is not captured - give it its own decision page.
 - After writing pages: `cortex.py check <files>`, then `cortex.py build`. Fix every problem before moving on.
 - Dates are local time (`date +%F`). Plain words, short sentences, plain hyphens.

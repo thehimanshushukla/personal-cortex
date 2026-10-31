@@ -30,17 +30,20 @@ Go through this list and decide for each one. Say the result for each in your ow
 | lesson | Did something go wrong or nearly go wrong? Cause and how to avoid it. |
 | insight | Did we learn something non-obvious? |
 | how-to | Did we work out a repeatable way of doing something? |
-| person | Was someone new mentioned, or did we learn something about a known person? Create or update `people/<slug>.md`. |
-| organisation | Same for organisations. |
-| follow-ups | Any promise made, by the person or to them? Write follow-up lines (format below) in the session page and the person page. |
+| person | Go through every person named in the session who said, owns, presented, wrote or decided something. Each gets a `people/<slug>.md` (create it) or a dated line on their existing page. A name in passing (an author in a source list) does not need a page. |
+| organisation | Same for every organisation that acts in the session (a partner, a standards body whose framework you used, a client). |
+| follow-ups | Any promise made between the person and someone else? Write follow-up lines (format below) in the session page and on the other person's page. |
+| to-dos | Anything the person still has to do themselves (rehearse, check a number, save a file)? Write it as a to-do line with `@me`. |
 
 If something already has a page (a decision being changed, a person already known), **update that page** with a dated line instead of creating a duplicate. If a decision replaces an older one, set the old one `status: superseded` and `superseded_by: <new id>`.
 
-Follow-up line format:
+Line formats:
 ```
 - [ ] @alex-rivera send the roadmap doc (due 2026-10-15) {theirs}
+- [ ] @alex-rivera confirm the pilot dates (due 2026-10-20) {mine}
+- [ ] @me rehearse the talk with a timer (due 2026-10-26) {mine}
 ```
-`{mine}` = the person owes it; `{theirs}` = someone owes it to them. Close done ones as `- [x]`.
+`{mine}` = the person owes it; `{theirs}` = someone owes it to them. `@me` = the person's own to-do, never a promise to themselves under their own name. Close done ones as `- [x]`.
 
 ## 3. Write pages the right way
 
@@ -66,7 +69,7 @@ If either reports errors, fix the pages and run again. Do not continue past an e
 
 ## 6. Save and back up (only this session's files)
 
-- Files to save = lines in `~/.cortex/sessions/<session_id>/written.txt` that are inside the vault, plus anything you edited in this step, plus `_cortex/` generated files.
+- Files to save = every page you wrote or edited in this log, plus lines in `~/.cortex/sessions/<session_id>/written.txt` that are inside the vault, plus `_cortex/` generated files and `home.md`. Never rely on `written.txt` alone: it is empty when the work happened where the hooks do not run (a Claude chat or project), and then nothing would be saved.
 - `git -C <vault> add -- <each file by name>` then `git -C <vault> commit -m "log: <date> <thing> - <short title>"`. Never `git add .` or `-A` (another chat may be working in the same vault).
 - `python3 ~/.cortex/engine/scripts/cortex.py backup` to push. If the push fails (offline, sign-in), say: "Saved on your Mac; the online copy will catch up at the next backup."
 - Mark done: `touch ~/.cortex/sessions/<session_id>/logged`.

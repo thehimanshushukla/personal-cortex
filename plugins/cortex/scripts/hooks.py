@@ -70,6 +70,19 @@ def sync_engine() -> None:
     stamp.write_text(marker)
 
 
+def unsaved_pages(v: Path) -> int:
+    """Pages written but never committed - a log done where the hooks did not run (Claude chat) leaves these."""
+    try:
+        r = subprocess.run(["git", "-C", str(v), "status", "--porcelain", "--untracked-files=all"],
+                           capture_output=True, text=True, timeout=5)
+    except (OSError, subprocess.SubprocessError):
+        return 0
+    if r.returncode != 0:
+        return 0
+    paths = [line[3:].strip('"') for line in r.stdout.splitlines()]
+    return sum(1 for f in paths if f.endswith(".md") and not f.startswith("_cortex/") and f != "home.md")
+
+
 def session_start(p: dict) -> int:
     try:
         sync_engine()
@@ -89,6 +102,10 @@ def session_start(p: dict) -> int:
         return 0
     card = v / "_cortex" / "card.md"
     text = card.read_text() if card.exists() else "Cortex card not built yet."
+    unsaved = unsaved_pages(v)
+    if unsaved:
+        text += (f"\n{unsaved} page(s) changed but not saved to GitHub yet. Offer once: "
+                 f"\"say 'back up my cortex' to save them now\".\n")
     # Weekly backup safety net: if the scheduled one was missed (Mac asleep), run it now in the background.
     try:
         subprocess.Popen([sys.executable, str(HERE / "cortex.py"), "--vault", str(v), "backup",

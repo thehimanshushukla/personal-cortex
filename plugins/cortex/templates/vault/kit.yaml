@@ -2,7 +2,7 @@
 # Simple 'key: value' or 'key: [a, b]' lines only.
 name: {{name}}
 vault: {{vault}}
-kit_version: 0.1.0
+kit_version: {{kit_version}}
 setup_date: {{setup_date}}
 areas: [{{areas}}]
 # one line per area: collections_<area>: [ ... ]

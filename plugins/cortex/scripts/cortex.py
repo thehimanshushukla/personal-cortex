@@ -35,6 +35,8 @@ HOME = Path.home()
 CONFIG = Path(os.environ.get("CORTEX_CONFIG", HOME / ".cortex" / "config.json"))
 GENERATED = "_cortex"
 SKIP_DIRS = {".git", ".claude", GENERATED, "sources", "_templates", "node_modules"}
+# Instruction and generated files that sit in the vault but are not pages (AGENTS.md and GEMINI.md since 0.3.0).
+NOT_PAGES = {"AGENTS.md", "CLAUDE.md", "GEMINI.md", "home.md", "README.md"}
 
 THING_TYPES = {"session", "decision", "lesson", "insight", "how-to"}
 TYPE_FOLDER = {"session": "sessions", "decision": "decisions", "lesson": "lessons",
@@ -104,7 +106,11 @@ def read_page(path: Path, vault: Path) -> Page:
     except (OSError, UnicodeDecodeError) as e:
         return Page(path, rel, {}, "", [f"cannot read file ({e})"])
     if not text.startswith("---\n"):
-        return Page(path, rel, {}, text, ["no frontmatter block at the top (must start with ---)"])
+        # A note with no header at all (an empty Obsidian daily note, a quick scribble) is a loose note:
+        # it waits on the sorting desk instead of stopping the build. A broken header is still an error.
+        page = Page(path, rel, {}, text, [])
+        page.loose = True
+        return page
     end = text.find("\n---", 4)
     if end == -1:
         return Page(path, rel, {}, text, ["frontmatter is not closed with ---"])
@@ -131,7 +137,7 @@ def iter_pages(vault: Path):
     for root, dirs, files in os.walk(vault):
         dirs[:] = sorted(d for d in dirs if d not in SKIP_DIRS and not d.startswith("."))
         for f in sorted(files):
-            if f.endswith(".md") and f not in ("CLAUDE.md", "home.md", "README.md"):
+            if f.endswith(".md") and not (root == str(vault) and f in NOT_PAGES):
                 p = Path(root) / f
                 yield read_page(p, vault)
 
@@ -239,7 +245,7 @@ def validate(pages: list[Page], vault: Path, people: set[str]) -> tuple[list[str
                 pe.append(f"superseded_by '{m['superseded_by']}' does not exist")
             for line in p.body.splitlines():
                 fm = FOLLOWUP_RE.match(line)
-                if fm and fm.group("person") not in people:
+                if fm and fm.group("person") not in people and fm.group("person") != "me":
                     pe.append(f"follow-up names @{fm.group('person')} but people/{fm.group('person')}.md does not exist")
                 elif re.match(r"^\s*-\s\[[ xX]\]\s+@", line) and not fm:
                     warnings.append(f"{p.rel}: follow-up line not in the standard shape: '{line.strip()[:80]}'")
@@ -256,7 +262,15 @@ def validate(pages: list[Page], vault: Path, people: set[str]) -> tuple[list[str
 
 # ---------------------------------------------------------------- generated files
 
-def followups(pages: list[Page]) -> list[dict]:
+def self_slugs(vault: Path) -> set[str]:
+    """Who 'I' am in follow-up lines: @me, or the person's own slug from kit.yaml."""
+    name = parse_kit(vault).get("name") or ""
+    return {"me"} | ({slugify(str(name))} if name else set())
+
+
+def followups(pages: list[Page], me: set[str] = frozenset({"me"})) -> list[dict]:
+    """Open task lines. A line I owe to myself (@me, or my own slug) is a to-do, not a follow-up:
+    follow-ups are promises between people, to-dos are my own work."""
     out = []
     for p in pages:
         for line in p.body.splitlines():
@@ -264,6 +278,7 @@ def followups(pages: list[Page]) -> list[dict]:
             if m and m.group("done") == " ":
                 out.append({"person": m.group("person"), "text": m.group("text").strip(),
                             "due": m.group("due") or "", "owner": m.group("owner"),
+                            "todo": m.group("person") in me and m.group("owner") == "mine",
                             "page": p.rel, "page_title": p.get("title")})
     return out
 
@@ -288,8 +303,10 @@ def render_index(pages: list[Page]) -> str:
 def render_followups(items: list[dict]) -> str:
     now = today()
     lines = ["# Open follow-ups", "", f"Generated {now}. Close one by changing its `- [ ]` to `- [x]` on the page it comes from.", ""]
-    for owner, label in (("mine", "I owe"), ("theirs", "Owed to me")):
-        group = sorted((i for i in items if i["owner"] == owner), key=lambda i: (i["due"] or "9999", i["person"]))
+    groups = (("My to-dos", lambda i: i["todo"]), ("I owe", lambda i: i["owner"] == "mine" and not i["todo"]),
+              ("Owed to me", lambda i: i["owner"] == "theirs"))
+    for label, keep in groups:
+        group = sorted((i for i in items if keep(i)), key=lambda i: (i["due"] or "9999", i["person"]))
         lines += [f"## {label} ({len(group)})", ""]
         if not group:
             lines += ["Nothing open.", ""]
@@ -343,6 +360,17 @@ def render_card(pages: list[Page], items: list[dict], vault: Path) -> str:
         if group:
             lines += [f"## {label}", ""] + [f"- {p.get('title')} - {p.get('summary')}" for p in group] + [""]
     soon = (now + dt.timedelta(days=7)).isoformat()
+    todos = [i for i in items if i["todo"]]
+    items = [i for i in items if not i["todo"]]
+    if todos:
+        lines += [f"## To-dos ({len(todos)} open)", ""]
+        due_todos = sorted((i for i in todos if i["due"] and i["due"] <= soon), key=lambda i: i["due"])
+        for i in due_todos[:6]:
+            flag = "OVERDUE: " if i["due"] < now.isoformat() else ""
+            lines.append(f"- {i['due']} - {flag}{i['text']}")
+        if not due_todos:
+            lines.append("- Nothing due in the next 7 days. Say 'what is on my list' for all of them.")
+        lines.append("")
     urgent = [i for i in items if i["due"] and i["due"] <= soon]
     if urgent or items:
         lines += [f"## Follow-ups ({len(items)} open)", ""]
@@ -356,6 +384,9 @@ def render_card(pages: list[Page], items: list[dict], vault: Path) -> str:
     inbox = list((vault / "inbox").glob("*.md")) if (vault / "inbox").exists() else []
     if inbox:
         lines += [f"Sorting desk: {len(inbox)} imported note(s) waiting. Say 'open the sorting desk'.", ""]
+    loose = loose_notes(vault)
+    if loose:
+        lines += [f"Loose notes: {len(loose)} with no header. Say 'open the sorting desk'.", ""]
     lb = last_backup(vault)
     if lb:
         age = (now - dt.date.fromisoformat(lb)).days
@@ -398,15 +429,20 @@ def render_home(pages: list[Page], vault: Path) -> str:
 # ---------------------------------------------------------------- commands
 
 def load_all(vault: Path):
-    pages = list(iter_pages(vault))
+    pages = [p for p in iter_pages(vault) if not getattr(p, "loose", False)]
     people = {p.path.stem for p in pages if p.rel.startswith("people/")}
     return pages, people
+
+
+def loose_notes(vault: Path) -> list[str]:
+    return [p.rel for p in iter_pages(vault) if getattr(p, "loose", False)]
 
 
 def cmd_build(args) -> int:
     vault = vault_path(args.vault)
     pages, people = load_all(vault)
     errors, warnings = validate(pages, vault, people)
+    warnings += [f"{rel}: loose note (no header) - left for the sorting desk" for rel in loose_notes(vault)]
     for w in warnings:
         print(f"note: {w}")
     if errors:
@@ -414,13 +450,14 @@ def cmd_build(args) -> int:
         for e in errors:
             print(f"  - {e}")
         return 1
-    items = followups(pages)
+    items = followups(pages, self_slugs(vault))
     gen = vault / GENERATED
     write_atomic(gen / "index.md", render_index(pages))
     write_atomic(gen / "followups.md", render_followups(items))
     write_atomic(gen / "card.md", render_card(pages, items, vault))
     write_atomic(vault / "home.md", render_home(pages, vault))
-    print(f"Build OK - {len(pages)} page(s), {len(items)} open follow-up(s), {len(warnings)} note(s).")
+    todos = sum(1 for i in items if i["todo"])
+    print(f"Build OK - {len(pages)} page(s), {len(items) - todos} open follow-up(s), {todos} to-do(s), {len(warnings)} note(s).")
     return 0
 
 
@@ -447,7 +484,7 @@ def cmd_card(args) -> int:
         print(card.read_text())
         return 0
     pages, _ = load_all(vault)
-    print(render_card(pages, followups(pages), vault))
+    print(render_card(pages, followups(pages, self_slugs(vault)), vault))
     return 0
 
 
@@ -621,6 +658,11 @@ def cmd_sort_desk(args) -> int:
     inbox = sorted((vault / "inbox").glob("*.md")) if (vault / "inbox").exists() else []
     print(desk.read_text() if desk.exists() else "The sorting desk is empty.")
     print(f"\n{len(inbox)} note(s) in inbox/.")
+    loose = loose_notes(vault)
+    if loose:
+        print(f"\n{len(loose)} loose note(s) with no header - give each a header and a home, or archive it:")
+        for rel in loose:
+            print(f"  - {rel}")
     return 0
 
 
