@@ -35,7 +35,9 @@ import cortex as C  # noqa: E402
 
 PAGE = Path(__file__).resolve().parent / "board.html"
 IDLE_SECONDS = 30 * 60
-PROMPT_LIMIT = 9000          # characters of the decoded prompt; Claude's link takes about 14,000
+PROMPT_LIMIT = 9000          # characters of the decoded prompt
+URL_LIMIT = 14000            # characters of the whole encoded claude:// link
+TRASH_KEEP = 20
 PAGE_TEXT_LIMIT = 6000
 MAX_BODY = 64 * 1024
 COLUMNS = [("overdue", "Overdue", False), ("week", "This week", True), ("later", "Later", True),
@@ -46,6 +48,11 @@ TARGETS = {key for key, _, droppable in COLUMNS if droppable}
 
 def state_file() -> Path:
     return Path.home() / ".cortex" / "board.json"
+
+
+def trash_dir(vault: Path) -> Path:
+    """Undo copies live outside the vault, so the GitHub backup never carries them."""
+    return Path.home() / ".cortex" / "board-trash" / hashlib.sha256(str(vault).encode()).hexdigest()[:16]
 
 
 def today() -> dt.date:  # tests replace this
@@ -134,16 +141,16 @@ def edit_line(line: str, target: str, me: set[str], now: dt.date) -> str:
                               + m.group("person") + "). Ask Claude to put the person's name on it, "
                               "then it can wait on them.")
             owner, doing = "theirs", False
-        else:
-            owner = "mine"
-            if target == "week":
-                set_date("due", this_friday(now).isoformat())
-                doing = False
-            elif target == "later":
-                set_date("due", None)
-                doing = False
-            elif target == "doing":
-                doing = True
+        elif target == "week":   # every move but Waiting keeps the owner: "Alex owes me" stays so
+            set_date("due", this_friday(now).isoformat())
+            doing = False
+        elif target == "later":
+            due = dict(dates).get("due", "")
+            if not due or due <= (now + dt.timedelta(days=7)).isoformat():
+                set_date("due", None)   # a date already beyond next week is kept
+            doing = False
+        elif target == "doing":
+            doing = True
     head = line[:m.end("text")]
     head = re.sub(r"^(\s*-\s)\[[ xX]\]", lambda x: x.group(1) + "[" + box + "]", head, count=1).rstrip()
     meta = "".join(f" ({k} {v})" for k, v in dates)
@@ -171,9 +178,18 @@ def inbox_prompt(rel: str, title: str) -> str:
 
 
 def claude_link(prompt: str, vault: Path) -> str:
-    # The prompt is clipped before encoding, so a %-escape is never cut in half.
-    return ("claude://code/new?q=" + urllib.parse.quote(prompt[:PROMPT_LIMIT], safe="")
-            + "&folder=" + urllib.parse.quote(str(vault), safe=""))
+    """The prompt is clipped in characters before encoding (so a %-escape is never cut in half)
+    until the whole encoded link fits Claude's limit."""
+    def link(n):
+        return ("claude://code/new?q=" + urllib.parse.quote(prompt[:n], safe="")
+                + "&folder=" + urllib.parse.quote(str(vault), safe=""))
+    lo, hi = 0, min(len(prompt), PROMPT_LIMIT)
+    if len(link(hi)) <= URL_LIMIT:
+        return link(hi)
+    while lo < hi:  # the longest prefix that fits
+        mid = (lo + hi + 1) // 2
+        lo, hi = (mid, hi) if len(link(mid)) <= URL_LIMIT else (lo, mid - 1)
+    return link(lo)
 
 
 def default_opener(target: str) -> tuple[bool, str]:
@@ -239,7 +255,8 @@ class Board:
                 out["problems"].append(f"could not read {p.rel} ({e}).")
                 continue
             digest, seen = sha(raw), {}
-            for n, (line, _end) in enumerate(split_lines(text), start=1):
+            for idx, line in self.task_lines(p.rel, text):
+                n = idx + 1
                 t = C.parse_task(line, me)
                 if not t:
                     continue
@@ -260,6 +277,12 @@ class Board:
         out["items"].sort(key=lambda i: (i["due"] or "9999", i["person"], i["text"]))
         out["inbox"] = self.inbox(out["problems"])
         return out
+
+    def task_lines(self, rel: str, text: str):
+        """(index, line) of the lines that can be tasks: the body, outside code fences - as the build sees it."""
+        page = C.read_page(self.vault / rel, self.vault, text)
+        lines = [c for c, _ in split_lines(text)]
+        return list(C.task_lines(lines, getattr(page, "body_line", 1) - 1)) if page.meta else []
 
     def _inbox_row(self, kind: str, rel: str, title: str, **extra) -> dict:
         iid = make_id("inbox", kind, rel)
@@ -292,12 +315,20 @@ class Board:
             out["loose"].append(self._inbox_row("loose", rel, Path(rel).stem, tasks=C.loose_task_count(v, rel)))
         if out["git"]:
             try:
-                r = subprocess.run(["git", "-C", str(v), "status", "--porcelain", "--untracked-files=all"],
-                                   capture_output=True, text=True, timeout=10)
+                r = subprocess.run(["git", "-C", str(v), "-c", "core.quotepath=off", "status", "--porcelain", "-z",
+                                    "--untracked-files=all"], capture_output=True, text=True, timeout=10)
                 if r.returncode != 0:
                     raise OSError(r.stderr.strip()[:200])
-                for line in r.stdout.splitlines():
-                    code, rel = line[:2], line[3:].split(" -> ")[-1].strip('"')
+                entries = r.stdout.split("\0")
+                k = 0
+                while k < len(entries):
+                    entry = entries[k]
+                    k += 1
+                    if len(entry) < 4:
+                        continue
+                    code, rel = entry[:2], entry[3:]
+                    if "R" in code or "C" in code:
+                        k += 1  # -z puts the old name of a rename or copy in the next field
                     if rel.endswith(".md") and not rel.startswith(C.GENERATED + "/") and rel != "home.md":
                         what = "deleted" if "D" in code else "new" if "?" in code or "A" in code else "changed"
                         out["unsaved"].append(self._inbox_row("unsaved", rel, Path(rel).stem, status=what))
@@ -339,9 +370,38 @@ class Board:
         return [e for e in errors if e.startswith(rel + ":")]
 
     def _rebuild(self) -> str:
-        _, _, errors, _ = C.build_outputs(self.vault)
+        """The page is already saved here, so a failed rebuild is a note, never an error."""
+        try:
+            _, _, errors, _ = C.build_outputs(self.vault)
+        except Exception:
+            return "Saved, the card will catch up at the next build."
         return "" if not errors else (f"Saved. The card was not rebuilt: {len(errors)} problem(s) elsewhere "
                                       "in your cortex. Say 'build my cortex' in Claude to see them.")
+
+    def _keep_copy(self, real: Path, original: bytes) -> None:
+        d = trash_dir(self.vault)
+        C.write_atomic(d / f"{dt.datetime.now().strftime('%Y%m%d-%H%M%S-%f')}-{real.name}", original)
+        for old in sorted(d.iterdir())[:-TRASH_KEEP]:
+            try:
+                old.unlink()
+            except OSError:
+                pass
+
+    @staticmethod
+    def _replace_if_unchanged(real: Path, expected: str, data: bytes | str, rel: str) -> None:
+        """Re-read right before replacing; if anyone else wrote meanwhile, write nothing."""
+        try:
+            now = real.read_bytes()
+        except OSError as e:
+            raise Refused(409, f"could not read {rel} ({e}). Nothing was changed.")
+        if sha(now) != expected:
+            raise Refused(409, "This page changed - reloaded. Nothing was changed; try again.")
+        C.write_atomic(real, data)
+
+    @staticmethod
+    def _writable(real: Path, rel: str) -> None:
+        if not os.access(real, os.W_OK):
+            raise Refused(403, f"{rel} is read-only, so the board will not change it.")
 
     def move(self, iid: str, seen_sha: str, target: str) -> dict:
         ref = self.ids.get(iid)
@@ -362,32 +422,48 @@ class Board:
             except (OSError, UnicodeDecodeError) as e:
                 raise Refused(409, f"could not read {rel} ({e}). The page was reloaded.")
             lines = split_lines(text)
-            hits = [i for i, (c, _) in enumerate(lines) if c == line]
+            hits = [i for i, c in self.task_lines(rel, text) if c == line]
             if sha(raw) == seen_sha and occ < len(hits):
                 i = hits[occ]
             elif len(hits) == 1:
                 i = hits[0]
             else:
                 raise Refused(409, "This page changed - reloaded. Try the move again.")
-            new = edit_line(line, target, self.me(), today())
+            me, now = self.me(), today()
+            new = edit_line(line, target, me, now)
             if new == line:
-                return {"ok": True, "message": "Nothing to change."}
+                return {"ok": True, "message": "Nothing to change.", "note": True}
             lines[i][0] = new
-            return self._write(rel, real, raw, "".join(c + e for c, e in lines))
+            out = self._write(rel, real, raw, "".join(c + e for c, e in lines))
+            occ_new = sum(1 for k, c in self.task_lines(rel, "".join(c + e for c, e in lines)) if c == new and k < i)
+            out["id"] = make_id("task", rel, new, str(occ_new))
+            t = C.parse_task(new, me)
+            landed = column_of(t, now)
+            if landed != target and not out["note"]:
+                names = {k: title for k, title, _ in COLUMNS}
+                why = (f" because @{t['person']} owes it" if landed == "waiting" else
+                       " because its date has passed" if landed == "overdue" else "")
+                out.update(note=True, message=f"Saved. It shows under {names.get(landed, landed)}{why}.")
+            return out
 
     def _write(self, rel: str, real: Path, original: bytes, text: str) -> dict:
+        self._writable(real, rel)
         before = self._page_errors(rel)
-        trash = self.vault / C.GENERATED / "trash" / f"{dt.datetime.now().strftime('%Y%m%d-%H%M%S-%f')}-{real.name}"
-        C.write_atomic(trash, original)
-        C.write_atomic(real, text)
+        written = sha(text.encode("utf-8"))
+        self._keep_copy(real, original)
+        self._replace_if_unchanged(real, sha(original), text, rel)
         new_errors = [e for e in self._page_errors(rel) if e not in before]
         if new_errors:
-            C.write_atomic(real, original)
+            try:
+                self._replace_if_unchanged(real, written, original, rel)
+            except Refused:
+                raise Refused(409, "The page was changed by something else while the board was checking it, "
+                              "so the board left it alone. Open the page to check it.")
             raise Refused(422, "That change was not saved, because the page would no longer check out: "
                           + new_errors[0].split(": ", 1)[-1])
-        self.last = {"rel": rel, "real": real, "original": original, "written": sha(text.encode("utf-8"))}
+        self.last = {"rel": rel, "real": real, "original": original, "written": written}
         note = self._rebuild()
-        return {"ok": True, "message": note or "Saved.", "undo": True}
+        return {"ok": True, "message": note or "Saved.", "note": bool(note), "undo": True}
 
     def undo(self) -> dict:
         with self.lock:
@@ -400,10 +476,11 @@ class Board:
                 raise Refused(409, f"could not read {last['rel']} ({e}).")
             if sha(current) != last["written"]:
                 raise Refused(409, "The page changed after that move, so undo would lose newer edits. Nothing was changed.")
-            C.write_atomic(last["real"], last["original"])
+            self._writable(last["real"], last["rel"])
+            self._replace_if_unchanged(last["real"], last["written"], last["original"], last["rel"])
             self.last = None
             note = self._rebuild()
-            return {"ok": True, "message": note or f"Undone. {last['rel']} is back as it was."}
+            return {"ok": True, "message": note or f"Undone. {last['rel']} is back as it was.", "note": bool(note)}
 
     # ---- opening things on this Mac
 
@@ -440,6 +517,7 @@ class Board:
 class Handler(BaseHTTPRequestHandler):
     server_version = "cortex-board"
     sys_version = ""
+    timeout = 10  # a slow or short body cannot hold a thread
 
     def log_message(self, *a):  # print nothing: the log would carry tokens and page names
         pass
@@ -600,8 +678,9 @@ def pid_alive(pid: int) -> bool:
     return True
 
 
-def running(vault: Path) -> dict | None:
-    """The board already open for this vault, if its process is alive and it answers."""
+def open_board() -> dict | None:
+    """The board recorded in ~/.cortex/board.json, if its process is alive and answers with its key
+    (so a reused process number is never mistaken for it). Adds 'vault' as the board reports it."""
     try:
         info = json.loads(state_file().read_text())
         if not pid_alive(int(info["pid"])):
@@ -609,11 +688,37 @@ def running(vault: Path) -> dict | None:
         req = urllib.request.Request(f"http://127.0.0.1:{int(info['port'])}/api/ping?t={info['token']}",
                                      headers={"Host": f"127.0.0.1:{int(info['port'])}"})
         with urllib.request.urlopen(req, timeout=2) as r:
-            if json.loads(r.read()).get("vault") == str(vault):
-                return info
+            info["vault"] = json.loads(r.read()).get("vault")
+            return info
     except Exception:
         return None
-    return None
+
+
+def running(vault: Path) -> dict | None:
+    """The board already open for this vault."""
+    info = open_board()
+    return info if info and info["vault"] == str(vault) else None
+
+
+STOP_HINT = "python3 ~/.cortex/engine/scripts/cortex.py board --stop"
+
+
+def stop(vault: Path) -> int:
+    info = open_board()
+    if not info:
+        print("No board is open.")
+        return 0
+    if info["vault"] != str(vault):
+        print(f"The open board is for another cortex folder ({info['vault']}). Stop it with: "
+              f"python3 ~/.cortex/engine/scripts/cortex.py --vault \"{info['vault']}\" board --stop")
+        return 1
+    os.kill(int(info["pid"]), signal.SIGTERM)
+    for _ in range(50):
+        if not pid_alive(int(info["pid"])):
+            break
+        time.sleep(0.1)
+    print("Board closed.")
+    return 0
 
 
 def run(args) -> int:
@@ -622,6 +727,8 @@ def run(args) -> int:
     if not vault.is_dir():
         print(f"could not read your cortex folder {vault} - it is not there. Say 'something is broken' in Claude.")
         return 1
+    if getattr(args, "stop", False):
+        return stop(vault)
     show = args.open and not args.no_browser
     info = running(vault)
     if info:
@@ -637,7 +744,8 @@ def run(args) -> int:
     try:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError:
-        print("Another board is starting or open for a different cortex folder. Close it, or wait a moment and ask again.")
+        print("Another board is open (or still starting) for a different cortex folder. Close it with:\n  "
+              + STOP_HINT + "\nthen ask again.")
         return 1
     try:
         srv = BoardServer(Board(vault), args.port or 0)

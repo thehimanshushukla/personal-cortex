@@ -42,6 +42,7 @@ def env(tmp_path, monkeypatch):
     subprocess.run(["git", "-C", str(vault), "config", "user.email", "t@example.com"], check=True)
     subprocess.run(["git", "-C", str(vault), "config", "user.name", "Test"], check=True)
     monkeypatch.setattr(B, "today", lambda: WED)
+    monkeypatch.setenv("HOME", str(home))   # undo copies and board.json go to the temp HOME
     return {"home": home, "vault": vault, "env": e}
 
 
@@ -208,9 +209,14 @@ def test_every_move(env, srv):
     assert code == 400 and "Who is it waiting on?" in r["message"]
     code, r, _ = move(srv, item(state(srv), "plan the day"), "overdue")
     assert code == 400 and "comes from the date" in r["message"]
-    # theirs -> This week makes it mine; mine (to another person) -> Waiting makes it theirs
-    assert move(srv, item(state(srv), "send deck"), "week")[0] == 200
-    assert "- [ ] @alex-rivera send deck (due 2026-10-30) {mine}" in lines_of(s)
+    # every move but Waiting keeps the owner: "Alex owes me" never becomes "I owe Alex"
+    for to in ("week", "later", "doing"):
+        code, r, _ = move(srv, item(state(srv), "send deck"), to)
+        assert code == 200 and "{theirs}" in [l for l in lines_of(s) if "send deck" in l][0], to
+    assert "- [ ] @alex-rivera send deck {theirs} {doing}" in lines_of(s)
+    code, r, _ = move(srv, item(state(srv), "send deck"), "week")
+    assert "- [ ] @alex-rivera send deck (due 2026-10-30) {theirs}" in lines_of(s)
+    assert r["note"] and "Waiting on others" in r["message"] and "owes it" in r["message"]
     assert move(srv, item(state(srv), "call back"), "waiting")[0] == 200
     assert "- [ ] @alex-rivera call back {theirs}" in lines_of(s)
     # the generated files follow every write
@@ -273,7 +279,8 @@ def test_undo_restores_and_refuses_after_outside_edit(env, srv):
     s = seed(env, "- [ ] @me undo me {mine}\n")
     before = s.read_bytes()
     assert move(srv, item(state(srv), "undo me"), "done")[0] == 200
-    assert list((env["vault"] / "_cortex/trash").iterdir())
+    assert not (env["vault"] / "_cortex/trash").exists()          # never in the vault (backup)
+    assert len(list(B.trash_dir(env["vault"]).iterdir())) == 1
     code, r, _ = call(srv, "POST", "/api/undo")
     assert code == 200 and s.read_bytes() == before
     assert call(srv, "POST", "/api/undo")[0] == 400        # nothing left to undo
@@ -355,15 +362,18 @@ def test_prompt_encoding_round_trip(env, srv):
 
 
 def test_prompt_length_bound():
-    t = C.parse_task("- [ ] @me " + "%&#\n❤" * 6000 + " {mine}")
-    assert t is None or True
     t = {"raw": "- [ ] @me " + "a%&#❤" * 6000, "due": "", "owner": "mine", "person": "me"}
     p = B.task_prompt(t, "T" * 5000, "x/" * 1000)
     assert len(p) < B.PROMPT_LIMIT and p.endswith("Do not change any file unless I say so.")
-    link = B.claude_link("%" * 20000, Path("/Users/dan/my cortex"))
-    q = urllib.parse.parse_qs(urllib.parse.urlsplit(link).query)
-    assert q["q"][0] == "%" * B.PROMPT_LIMIT and q["folder"][0] == "/Users/dan/my cortex"
-    assert not re.search(r"%(?![0-9A-F]{2})", link.split("?", 1)[1])     # no half escape anywhere
+    for text in ("%" * 20000, "a" * 20000, "\u2764\ufe0f&#\n" * 3000, "ok"):
+        link = B.claude_link(text, Path("/Users/dan/my cortex"))
+        assert len(link) <= B.URL_LIMIT
+        q = urllib.parse.parse_qs(urllib.parse.urlsplit(link).query)
+        assert text.startswith(q["q"][0]) and q["folder"][0] == "/Users/dan/my cortex"
+        assert not re.search(r"%(?![0-9A-F]{2})", link.split("?", 1)[1])     # no half escape anywhere
+    assert len(B.claude_link("%" * 20000, Path("/v"))) > B.URL_LIMIT - 3       # fills the room it has
+    q = urllib.parse.parse_qs(urllib.parse.urlsplit(B.claude_link("a" * 20000, Path("/v"))).query)
+    assert q["q"][0] == "a" * B.PROMPT_LIMIT
 
 
 # ---------------------------------------------------------------- inbox and failed reads
@@ -454,3 +464,154 @@ def test_idle_server_exits(env):
     with pytest.raises(Exception):
         call(server, "GET", "/api/state")
     server.server_close()
+
+
+# ---------------------------------------------------------------- breaker findings (0.4.0)
+
+def test_later_keeps_a_far_date(env, srv):
+    s = seed(env, "- [ ] @me far off (due 2026-12-15) {mine}\n- [ ] @me near (due 2026-11-02) {mine} {doing}\n")
+    assert move(srv, item(state(srv), "far off"), "doing")[0] == 200
+    assert move(srv, item(state(srv), "far off"), "later")[0] == 200
+    assert "- [ ] @me far off (due 2026-12-15) {mine}" in lines_of(s)
+    assert move(srv, item(state(srv), "near"), "later")[0] == 200
+    assert "- [ ] @me near {mine}" in lines_of(s)
+
+
+def test_append_during_move_is_never_lost(env, srv, monkeypatch):
+    s = seed(env, "- [ ] @me race {mine}\n")
+    it = item(state(srv), "race")
+    real_errors = B.Board._page_errors
+
+    def append_then_check(self, rel):     # another process appends while the board checks the page
+        with open(s, "a") as fh:
+            fh.write("- [ ] @me appended elsewhere {mine}\n")
+        return real_errors(self, rel)
+    monkeypatch.setattr(B.Board, "_page_errors", append_then_check)
+    code, r, _ = move(srv, it, "done")
+    assert code == 409 and "Nothing was changed" in r["message"]
+    assert "appended elsewhere" in s.read_text() and "- [ ] @me race {mine}" in lines_of(s)
+
+
+def test_rollback_refuses_when_page_changed_meanwhile(env, srv, monkeypatch):
+    s = seed(env, "- [ ] @me risky {mine}\n")
+    it = item(state(srv), "risky")
+    calls = {"n": 0}
+
+    def errors(self, rel):
+        calls["n"] += 1
+        if calls["n"] == 2:                # after the board's write: someone else edits, and the check fails
+            s.write_text(s.read_text() + "\nnewer edit\n")
+            return [f"{rel}: boom"]
+        return []
+    monkeypatch.setattr(B.Board, "_page_errors", errors)
+    code, r, _ = move(srv, it, "done")
+    assert code == 409 and "newer edit" in s.read_text()
+
+
+def test_unique_temp_files_and_mode_kept(env, tmp_path):
+    d = tmp_path / "gen"
+    d.mkdir()
+    f = d / "card.md"
+    f.write_text("x")
+    f.chmod(0o640)
+    import threading
+    threads = [threading.Thread(target=C.write_atomic, args=(f, f"writer {n}\n" * 2000)) for n in range(8)]
+    [t.start() for t in threads]
+    [t.join() for t in threads]
+    assert f.read_text().startswith("writer ") and oct(f.stat().st_mode)[-3:] == "640"
+    assert [p.name for p in d.iterdir()] == ["card.md"]       # no temp left behind
+
+
+def test_rebuild_failure_is_a_note_not_an_error(env, srv, monkeypatch):
+    s = seed(env, "- [ ] @me keep going {mine}\n")
+    monkeypatch.setattr(C, "build_outputs", lambda v: (_ for _ in ()).throw(OSError("disk full")))
+    code, r, _ = move(srv, item(state(srv), "keep going"), "done")
+    assert code == 200 and r["note"] and "catch up at the next build" in r["message"]
+    assert "[x] @me keep going" in s.read_text()
+
+
+def test_trash_keeps_last_20(env, srv):
+    seed(env, "- [ ] @me flip {mine}\n")
+    for n in range(23):
+        assert move(srv, item(state(srv), "flip"), "doing" if n % 2 == 0 else "later")[0] == 200
+    assert len(list(B.trash_dir(env["vault"]).iterdir())) == 20
+    assert "_cortex/trash/" not in (SCRIPTS.parent / "templates/vault/gitignore").read_text()
+
+
+def test_read_only_page_refused(env, srv):
+    s = seed(env, "- [ ] @me locked {mine}\n")
+    before = s.read_bytes()
+    s.chmod(0o444)
+    try:
+        code, r, _ = move(srv, item(state(srv), "locked"), "done")
+        assert code == 403 and "read-only" in r["message"] and s.read_bytes() == before
+    finally:
+        s.chmod(0o644)
+
+
+def test_unsaved_names_with_spaces_unicode_and_renames(env, srv):
+    seed(env, "- [ ] @me x {mine}\n")
+    v = env["vault"]
+    subprocess.run(["git", "-C", str(v), "add", "-A"], check=True)
+    subprocess.run(["git", "-C", str(v), "commit", "-qm", "x"], check=True)
+    (v / "acme" / "caf\u00e9 notes.md").write_text("hello\n")
+    subprocess.run(["git", "-C", str(v), "mv", "people/alex-rivera.md", "people/alex r\u00e9.md"], check=True)
+    rels = {r["rel"] for r in state(srv)["inbox"]["unsaved"]}
+    assert rels == {"acme/caf\u00e9 notes.md", "people/alex r\u00e9.md"}
+
+
+def test_fenced_and_header_lines_are_not_tasks(env, srv):
+    s = seed(env, "```\n- [ ] @me inside a fence {mine}\n```\n~~~~\n- [ ] @nobody also fenced {mine}\n~~~~\n"
+                  "- [ ] @me real one {mine}\n- [ ] @me inside a fence {mine}\n")
+    texts = sorted(i["text"] for i in state(srv)["items"])
+    assert texts == ["inside a fence", "real one"]
+    r = run(env, "build")
+    assert r.returncode == 0, r.stdout          # @nobody inside a fence is not checked
+    fu = (env["vault"] / "_cortex/followups.md").read_text()
+    assert fu.count("inside a fence") == 1 and "also fenced" not in fu
+    # the one real 'inside a fence' line is unique among task lines, so a changed page still finds it
+    it = item(state(srv), "inside a fence")
+    s.write_text(s.read_text() + "\n")
+    assert move(srv, it, "doing")[0] == 200
+    assert "```\n- [ ] @me inside a fence {mine}\n```" in s.read_text()
+    assert "- [ ] @me inside a fence {mine} {doing}" in lines_of(s)
+
+
+def test_validate_and_followups_agree_on_line_separators(env):
+    s = seed(env, "- [ ] @me one\u2028two {mine}\n")
+    r = run(env, "build")
+    assert r.returncode == 0 and "standard shape" not in r.stdout
+    items = C.followups(C.load_all(env["vault"])[0])
+    assert [i["text"] for i in items] == ["one\u2028two"]
+
+
+def test_move_returns_new_id_for_focus(env, srv):
+    seed(env, "- [ ] @me focus me {mine}\n")
+    code, r, _ = move(srv, item(state(srv), "focus me"), "doing")
+    assert code == 200 and r["id"] == item(state(srv), "focus me")["id"]
+
+
+def test_slow_body_does_not_hold_the_server(env, srv):
+    import socket
+    sock = socket.create_connection(("127.0.0.1", srv.port))
+    sock.sendall((f"POST /api/move HTTP/1.1\r\nHost: 127.0.0.1:{srv.port}\r\nCookie: {srv.cookie}={srv.token}\r\n"
+                  f"Origin: http://127.0.0.1:{srv.port}\r\nContent-Type: application/json\r\n"
+                  "Content-Length: 500\r\n\r\n{").encode())
+    assert B.Handler.timeout == 10
+    assert call(srv, "GET", "/api/ping")[0] == 200      # other requests are still served
+    sock.close()
+
+
+def test_stop_closes_the_board(env):
+    seed(env, "- [ ] @me x {mine}\n")
+    p = subprocess.Popen([sys.executable, str(CORTEX), "board", "--no-browser"], stdout=subprocess.PIPE,
+                         stderr=subprocess.PIPE, text=True, env=env["env"])
+    try:
+        p.stdout.readline()
+        r = run(env, "board", "--stop")
+        assert r.returncode == 0 and "Board closed" in r.stdout
+        assert p.wait(timeout=10) == 0
+        assert "No board is open" in run(env, "board", "--stop").stdout
+    finally:
+        if p.poll() is None:
+            p.kill()

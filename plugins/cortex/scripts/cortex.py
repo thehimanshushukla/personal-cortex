@@ -19,8 +19,8 @@ Commands:
   install-backup        weekly backup LaunchAgent (Sundays 18:00 local)
   feedback --type T --message M [--name N --email E --org O --contact yes|no] [--dry-run]
                         submit to the maker's feedback form (the skill shows it and asks first)
-  board [--open] [--port N] [--no-browser]
-                        the board and inbox page on this Mac only (scripts/board.py)
+  board [--open] [--port N] [--no-browser] [--stop]
+                        the board and inbox page on this Mac only (scripts/board.py); --stop closes it
 """
 from __future__ import annotations
 
@@ -29,8 +29,10 @@ import datetime as dt
 import json
 import os
 import re
+import stat
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 HOME = Path.home()
@@ -108,13 +110,18 @@ def parse_value(raw: str):
     return raw
 
 
-def read_page(path: Path, vault: Path) -> Page:
+def read_page(path: Path, vault: Path, text: str | None = None) -> Page:
+    """Parse a page. `text` (already read by the caller) skips the read, so the caller's bytes and
+    the parsed page are the same version."""
     rel = path.relative_to(vault).as_posix()
     errors: list[str] = []
-    try:
-        text = path.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError) as e:
-        return Page(path, rel, {}, "", [f"cannot read file ({e})"])
+    if text is not None:
+        text = text.replace("\r\n", "\n").replace("\r", "\n")  # what read_text does
+    else:
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as e:
+            return Page(path, rel, {}, "", [f"cannot read file ({e})"])
     text = text.lstrip("\ufeff")  # Windows editors add a byte-order mark
     head = [l for l in text.splitlines()[:12] if l.strip() and not l.lstrip().startswith("#")]
     after_rule = head[1:4] if head and head[0].strip() == "---" else []
@@ -276,7 +283,7 @@ def validate(pages: list[Page], vault: Path, people: set[str]) -> tuple[list[str
                     pe.append(f"source '{src}' is not in the vault")
             if m.get("superseded_by") and m["superseded_by"] not in all_ids:
                 pe.append(f"superseded_by '{m['superseded_by']}' does not exist")
-            for line in p.body.splitlines():
+            for _, line in task_lines(p.body.split("\n")):
                 fm = FOLLOWUP_RE.match(line)
                 who = fm.group("person") if fm else ""
                 if fm and who in headerless_people:
@@ -318,13 +325,34 @@ def parse_task(line: str, me: set[str] = frozenset({"me"})) -> dict | None:
             "todo": m.group("person") in me and m.group("owner") == "mine", "raw": line}
 
 
+FENCE_RE = re.compile(r"^\s*(`{3,}|~{3,})")
+
+
+def task_lines(lines: list[str], start: int = 0):
+    """(index, line) for lines that can hold a task: from `start` (the body), outside fenced code
+    blocks. Build, validate and the board all scan through this, so they always agree."""
+    fence = ""
+    for i, line in enumerate(lines):
+        if i < start:
+            continue
+        m = FENCE_RE.match(line)
+        if fence:
+            if m and m.group(1)[0] == fence[0] and len(m.group(1)) >= len(fence):
+                fence = ""
+            continue
+        if m:
+            fence = m.group(1)
+            continue
+        yield i, line
+
+
 def followups(pages: list[Page], me: set[str] = frozenset({"me"})) -> list[dict]:
     """Open task lines. A line I owe to myself (@me, or my own slug) is a to-do, not a follow-up:
     follow-ups are promises between people, to-dos are my own work."""
     out = []
     for p in pages:
         first = getattr(p, "body_line", 1)
-        for n, line in enumerate(p.body.split("\n")):
+        for n, line in task_lines(p.body.split("\n")):
             t = parse_task(line, me)
             if t and not t["closed"]:
                 t.update(page=p.rel, page_title=p.get("title"), line=first + n)
@@ -332,14 +360,31 @@ def followups(pages: list[Page], me: set[str] = frozenset({"me"})) -> list[dict]
     return out
 
 
+_UMASK = os.umask(0)
+os.umask(_UMASK)
+
+
 def write_atomic(path: Path, text: str | bytes) -> None:
+    """Temp file + rename. The temp name is unique per write, so two writers never share it,
+    and the file keeps its permissions."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    if isinstance(text, bytes):
-        tmp.write_bytes(text)
-    else:
-        tmp.write_text(text, encoding="utf-8")
-    tmp.replace(path)
+    data = text if isinstance(text, bytes) else text.encode("utf-8")
+    try:
+        mode = stat.S_IMODE(path.stat().st_mode)
+    except OSError:
+        mode = 0o666 & ~_UMASK
+    fd, tmp = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    try:
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(data)
+        os.chmod(tmp, mode)
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 
 def render_index(pages: list[Page]) -> str:
@@ -884,6 +929,7 @@ def main(argv=None) -> int:
     f.add_argument("--contact", choices=["yes", "no"], default="yes"); f.add_argument("--dry-run", action="store_true")
     bd = sub.add_parser("board"); bd.add_argument("--open", action="store_true")
     bd.add_argument("--port", type=int, default=0); bd.add_argument("--no-browser", action="store_true")
+    bd.add_argument("--stop", action="store_true")
     # --vault is accepted after the subcommand too (the LaunchAgent passes it that way)
     argv = list(sys.argv[1:] if argv is None else argv)
     if "--vault" in argv[1:]:

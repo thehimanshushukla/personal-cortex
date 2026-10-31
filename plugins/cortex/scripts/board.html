@@ -29,6 +29,7 @@ h1 { font-size: 26px; margin: 0; font-weight: 650; }
   color: var(--warn); display: none; }
 #msg.show { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 #msg.good { background: var(--ok-bg); color: var(--ok); }
+#msg.note { background: #eef1f4; color: var(--ink); }
 .problems { margin: 0 20px 12px; padding: 12px 16px; border-radius: 10px; background: var(--late-bg); color: var(--late); }
 .problems ul { margin: 6px 0 0; padding-left: 20px; }
 main { padding: 0 20px 40px; }
@@ -122,10 +123,11 @@ main { padding: 0 20px 40px; }
   }
   function $(id) { return document.getElementById(id); }
 
+  // tone: true = success (green), "note" = saved with something to know (neutral), else a warning.
   function say(text, good, undo) {
     var m = $("msg");
     m.textContent = "";
-    m.className = "show" + (good ? " good" : "");
+    m.className = "show" + (good === "note" ? " note" : good ? " good" : "");
     m.appendChild(el("span", { text: text }));
     if (undo) m.appendChild(el("button", { cls: "btn", text: "Undo", onclick: doUndo }));
     clearTimeout(say.t);
@@ -194,7 +196,7 @@ main { padding: 0 20px 40px; }
     state.columns.forEach(function (c) {
       if (c.droppable && c.key !== i.column) sel.appendChild(el("option", { value: c.key, text: c.title }));
     });
-    var card = el("div", { cls: "card", tabindex: "0", draggable: "true", role: "button",
+    var card = el("div", { cls: "card", tabindex: "0", draggable: "true", role: "button", "data-id": i.id,
       "aria-label": (i.text || i.line) + ". Press Enter for details." }, [
       el("p", { cls: "text", text: i.text || i.line }), meta, sel]);
     // A select inside a draggable card: switch dragging off while it is in use, so a tap or
@@ -263,7 +265,10 @@ main { padding: 0 20px 40px; }
     api("POST", "/api/move", { id: i.id, sha: i.sha, to: to }).then(function (r) {
       if (r.status === 200 && r.ok) {
         closeDrawer();
-        load().then(function () { say(r.message === "Saved." ? "Moved to " + col.title + "." : r.message, true, r.undo); });
+        load().then(function () {
+          say(r.note ? r.message : "Moved to " + col.title + ".", r.note ? "note" : true, r.undo);
+          focusCard(r.id || i.id);
+        });
       } else if (r.status === 409 || r.status === 404) {
         closeDrawer(); load(r.message || "This page changed - reloaded.");
       } else {
@@ -272,10 +277,17 @@ main { padding: 0 20px 40px; }
     });
   }
 
+  function focusCard(id) {
+    var cards = document.querySelectorAll(".card");
+    for (var k = 0; k < cards.length; k++) {
+      if (cards[k].getAttribute("data-id") === id) { cards[k].focus(); cards[k].scrollIntoView({ block: "nearest" }); return; }
+    }
+  }
+
   function doUndo() {
     api("POST", "/api/undo", {}).then(function (r) {
       closeDrawer();
-      load().then(function () { say(r.message || "Undo did not work.", r.ok); });
+      load().then(function () { say(r.message || "Undo did not work.", r.ok ? (r.note ? "note" : true) : false); });
     });
   }
 
@@ -394,7 +406,17 @@ main { padding: 0 20px 40px; }
   $("refresh").addEventListener("click", function () { load().then(function () { say("Up to date.", true); }); });
   $("undo").addEventListener("click", doUndo);
   $("shade").addEventListener("click", closeDrawer);
-  document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeDrawer(); });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") closeDrawer();
+    if (e.key !== "Tab" || !current) return;
+    // Keep Tab inside the open drawer.
+    var d = $("drawer"), f = d.querySelectorAll("button, select, [tabindex]:not([tabindex='-1'])");
+    if (!f.length) return;
+    var first = f[0], last = f[f.length - 1];
+    if (!d.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+    else if (e.shiftKey && (document.activeElement === first || document.activeElement === d)) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  });
   document.addEventListener("visibilitychange", function () { if (!document.hidden && !current) load(); });
   try { if (localStorage.getItem("cortex-board-tab") === "inbox") showTab("inbox"); } catch (e) {}
   load();

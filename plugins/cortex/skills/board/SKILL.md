@@ -27,9 +27,11 @@ The board is a page on this Mac only. It shows every task line in the cortex as 
 | Moved to | What changes on the line |
 |---|---|
 | This week | due date set to this Friday (next Friday at the weekend) |
-| Later | the due date is removed |
+| Later | the due date is removed (a date more than a week away is kept) |
 | In progress | `{doing}` is added |
 | Waiting on others | `{theirs}` - not for the person's own to-dos (it asks who it is waiting on) |
+
+Only Waiting on others changes whose turn it is. Every other move keeps `{mine}` or `{theirs}` as it was, so "Alex owes me" never turns into "I owe Alex"; a card someone else owes stays in Waiting on others with its new date.
 | Done | `- [x]` and `(done <today>)` |
 
 Overdue is worked out from the date, so nothing can be dropped there. "Undo last change" puts the page back exactly as it was. Every write is checked like a log, and the card and follow-ups list are rebuilt right after.
@@ -42,7 +44,7 @@ Overdue is worked out from the date, so nothing can be dropped there. "Undo last
 
 - "This page changed - reloaded": the page was edited somewhere else (Obsidian, another chat) after the board read it. The board never guesses which line was meant; try the move again.
 - "could not read X": that page has a problem. Offer to fix it (`cortex.py check <file>`), then refresh the board.
-- To stop the board: it closes itself after 30 minutes without use; nothing needs to be done.
+- To stop the board: it closes itself after 30 minutes without use. To close it now (or when it says another board is open): `python3 ~/.cortex/engine/scripts/cortex.py board --stop`.
 
 ## Teaching note
 

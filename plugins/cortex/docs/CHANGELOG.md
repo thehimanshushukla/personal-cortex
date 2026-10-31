@@ -3,7 +3,9 @@
 ## 0.4.0
 The board and inbox: say "show my board".
 - A page in your browser, on this Mac only, with every to-do and follow-up as a card in six columns: Overdue, This week, Later, In progress, Waiting on others, Done (last 7 days). Filter by area or person.
-- Move a card by dragging it or with "Move to..." on the card (keyboard works too). A move changes exactly that one line on its page: This week sets the due date to Friday, Later removes it, In progress adds `{doing}`, Waiting on others marks it `{theirs}`, Done ticks it and adds `(done <date>)`. "Undo last change" puts the page back exactly as it was.
+- Move a card by dragging it or with "Move to..." on the card (keyboard works too). A move changes exactly that one line on its page: This week sets the due date to Friday, Later removes it (a date more than a week away is kept), In progress adds `{doing}`, Waiting on others marks it `{theirs}`, Done ticks it and adds `(done <date>)`. Only Waiting on others changes whose turn it is. "Undo last change" puts the page back exactly as it was; its copies stay on this Mac in `~/.cortex/board-trash/` (the last 20), never in your GitHub backup.
+- Tasks written inside code blocks (``` or ~~~) are examples, not tasks: the build and the board both skip them.
+- `cortex.py board --stop` closes the board.
 - Click a card to see its line, its page and the person, and to open it in Obsidian, open the file, or ask Claude about it (Claude opens with the question typed in; nothing is sent until you press send).
 - The Inbox tab lists sorting-desk proposals, notes in `inbox/`, loose notes (with how many task lines they hold) and pages not saved yet, each with Open file and Ask Claude.
 - Safe by design: the board only answers this Mac, needs the secret key in its link, never changes a line it cannot find exactly once ("this page changed - reloaded"), checks the page after every change and puts it back if the check fails, and rebuilds the card right after.

@@ -12,7 +12,6 @@ The one fact sheet about this plugin. Setup reads it to give the tour at the end
   - `_cortex/card.md`: the start card
   - `_cortex/followups.md`: everything owed, both ways
   - `_cortex/sorting-desk.md`: imports waiting for your decision
-  - `_cortex/trash/`: the page as it was before each board change (for Undo)
 
 ## 2. What runs on its own (hooks)
 
@@ -60,7 +59,7 @@ Say these in your own words. Exact phrases are not needed.
 
 - **Follow-ups** are promises between you and someone else: what you owe them, what they owe you.
 - **To-dos** are your own work (rehearse the talk, check a number). They are written with `@me` and shown apart on the card and in the follow-ups list, so your own list does not read as promises to yourself.
-- **On the board** each line is a card. A line can also carry `(added <date>)` (written when it is created), `(done <date>)` (when it is ticked) and `{doing}` (in progress). Moving a card changes only that one line, and "Undo last change" puts the page back as it was. The board is a page on this Mac only, opened with a secret key in its link, and it closes itself after 30 minutes without use.
+- **On the board** each line is a card. A line can also carry `(added <date>)` (written when it is created), `(done <date>)` (when it is ticked) and `{doing}` (in progress). Moving a card changes only that one line, and "Undo last change" puts the page back as it was (its copies stay on this Mac in `~/.cortex/board-trash/`, the last 20, never in the backup). Only a move to Waiting on others changes whose turn it is. The board is a page on this Mac only, opened with a secret key in its link, and it closes itself after 30 minutes without use.
 - **Loose notes** - a page with no header, such as an empty daily note Obsidian makes - no longer stop the build. The card counts them and the sorting desk lists them so you can give each a home.
 
 ## 5. Backup
