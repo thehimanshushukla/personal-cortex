@@ -1,11 +1,11 @@
 ---
 name: followups
-description: Show open promises and follow-ups by person and date, and close the ones that are done. Use when the person says "what did I promise whom", "what do I owe people", "what is waiting on others", "who owes me what", "open follow-ups", "what is overdue", "my follow-ups with <name>", or "mark the <thing> follow-up done".
+description: Show open promises and follow-ups by person and date, and close the ones that are done. Use when the person says "what did I promise whom", "what do I owe people", "what is waiting on others", "who owes me what", "open follow-ups", "what is overdue", "my follow-ups with <name>", "mark the <thing> follow-up done", "what is on my list", "my to-dos", or "what do I still have to do".
 ---
 
 # Follow-ups
 
-Show what the person owes to others and what others owe them, gathered from every page in the cortex.
+Show what the person owes to others, what others owe them, and their own to-dos, gathered from every page in the cortex.
 
 Below, `cortex` means `python3 ~/.cortex/engine/scripts/cortex.py`. The vault path is in `~/.cortex/config.json`.
 
@@ -25,9 +25,11 @@ Read `_cortex/followups.md`. Every follow-up came from a line shaped like this:
 The build records the source file for each one. Group the list:
 
 1. **Overdue first**: a due date before today. Show how many days late.
-2. **Then by mine and theirs:**
-   - "You owe" means `{mine}`.
+2. **Then the three groups** (the build already splits them in `_cortex/followups.md`):
+   - "Your to-dos": the "My to-dos" section - lines with `@me` or the person's own name. Show them as plain tasks ("rehearse the talk"), never as "You owe @me".
+   - "You owe" means `{mine}` to someone else.
    - "Waiting on others" means `{theirs}`.
+   - If they asked "what is on my list" or "my to-dos", show only the to-dos.
 3. **Within each, by person**, with the earliest due date first. Items with no date go last.
 
 If the person asked about one person ("my follow-ups with Alex"), show only that person, both directions.

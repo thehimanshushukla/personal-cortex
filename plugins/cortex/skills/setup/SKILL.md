@@ -101,7 +101,7 @@ Say: "Collection folders start empty. Each project or center gets its own folder
 2. **Folders:** create vault root, `people/`, `organisations/`, `sources/`, `inbox/`, `_cortex/`, each area folder, its `meetings/` if chosen, and each collection folder (add an empty `.gitkeep` so git keeps empty folders).
 3. **Files from templates** in `~/.cortex/engine/templates/vault/`:
    - `AGENTS.md` -> vault `AGENTS.md`, plus `CLAUDE.md` and `GEMINI.md` copied as they are (one-line pointers, so Claude Code, Codex, Cursor and Gemini all read the same instructions). Keep the `<!-- cortex:begin -->` ... `<!-- cortex:end -->` block exactly; their own notes go below it).
-   - `kit.yaml` -> vault `kit.yaml`; fill in name, areas, collections per area, vault path, github yes/no, `kit_version` (the `version` in `~/.cortex/engine/.claude-plugin/plugin.json`, never the template's placeholder), `teach: full`, `setup_date` (today, local `date +%F`).
+   - `kit.yaml` -> vault `kit.yaml`; fill in name (their full name, so their own to-dos are told apart from a colleague who shares a first name), areas, collections per area, vault path, github yes/no, `kit_version` (the `version` in `~/.cortex/engine/.claude-plugin/plugin.json`, never the template's placeholder), `teach: full`, `setup_date` (today, local `date +%F`).
    - `gitignore` -> vault `.gitignore`.
    - `area_index.md` -> `<area>/_index.md` for each area, filling id `area-<area>`, title, created/updated today, summary from what they said the area is for (ask one line if they did not say).
 4. **Pointer file:** write `~/.cortex/config.json` as `{"vault": "<absolute path>", "kit_version": "<version from kit.yaml>"}`.

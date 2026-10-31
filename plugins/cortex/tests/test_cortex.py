@@ -363,8 +363,112 @@ def test_start_card_flags_unsaved_pages(env):
     seed(env)
     assert run(env, "build").returncode == 0
     r = hook(env, "session-start", {"session_id": "s1"})
-    assert "not saved to GitHub yet" in r.stdout
+    assert "not saved yet" in r.stdout
     subprocess.run(["git", "-C", str(env["vault"]), "add", "-A"], check=True)
     subprocess.run(["git", "-C", str(env["vault"]), "commit", "-qm", "x"], check=True)
     r = hook(env, "session-start", {"session_id": "s2"})
-    assert "not saved to GitHub yet" not in r.stdout
+    assert "not saved yet" not in r.stdout
+
+
+# ---------------------------------------------------------------- 0.3.1 breaker findings
+
+@pytest.mark.parametrize("text", [
+    "id: decision-acme-x\ntitle: Real\n---\nbody\n",          # opening --- lost
+    "﻿---\nid: x\n",                                       # BOM + unclosed header
+    "\n---\nid: x\n",                                           # blank line first + unclosed
+])
+def test_broken_header_is_not_loose(env, text):
+    seed(env)
+    f = env["vault"] / "acme" / "lost.md"
+    f.write_text(text, encoding="utf-8")
+    assert run(env, "build").returncode == 1
+    r = run(env, "check", str(f))
+    assert r.returncode == 1, r.stdout
+
+
+def test_bom_page_reads_fine(env):
+    s, _ = seed(env)
+    p = Path(s["path"])
+    p.write_text("﻿" + p.read_text(), encoding="utf-8")
+    assert run(env, "build").returncode == 0
+
+
+def test_check_flags_named_loose_note(env):
+    seed(env)
+    f = env["vault"] / "acme" / "scribble.md"
+    f.write_text("just text\n")
+    r = run(env, "check", str(f))
+    assert r.returncode == 1 and "no header" in r.stdout
+
+
+def test_readme_and_claude_md_skipped_everywhere(env):
+    seed(env)
+    d = env["vault"] / "acme" / "projects" / "pilot-project"
+    (d / "README.md").write_text("---\nlayout: page\ntitle: Site\n---\n")
+    (d / "CLAUDE.md").write_text("@AGENTS.md\n")
+    r = run(env, "build")
+    assert r.returncode == 0, r.stdout
+    assert "loose note" not in r.stdout
+
+
+def test_own_name_todo_needs_no_people_page(env):
+    s, _ = seed(env)
+    (env["vault"] / "kit.yaml").write_text("name: Sam Lee\n")
+    p = Path(s["path"])
+    p.write_text(p.read_text() + "\n- [ ] @sam-lee rehearse {mine}\n")
+    assert run(env, "build").returncode == 0
+
+
+def test_headerless_people_page_named_clearly(env):
+    s, _ = seed(env)
+    (env["vault"] / "people" / "bob.md").write_text("Bob\n")
+    p = Path(s["path"])
+    p.write_text(p.read_text() + "\n- [ ] @bob call {theirs}\n")
+    r = run(env, "build")
+    assert r.returncode == 1 and "people/bob.md has no header" in r.stdout
+
+
+def test_self_owed_theirs_warns(env):
+    s, _ = seed(env)
+    p = Path(s["path"])
+    p.write_text(p.read_text() + "\n- [ ] @me something {theirs}\n")
+    r = run(env, "build")
+    assert r.returncode == 0 and "owed to yourself" in r.stdout
+
+
+def test_inbox_loose_note_counted_once(env):
+    seed(env)
+    (env["vault"] / "inbox").mkdir(exist_ok=True)
+    (env["vault"] / "inbox" / "raw.md").write_text("pasted\n")
+    run(env, "build")
+    card = (env["vault"] / "_cortex/card.md").read_text()
+    assert ("Sorting desk: 1" in card) != ("Loose notes: 1" in card)
+
+
+def test_unsaved_ignores_parent_repo(env, tmp_path):
+    outer = tmp_path / "outer"
+    vault = outer / "cortex"
+    vault.mkdir(parents=True)
+    subprocess.run(["git", "init", "-q", str(outer)], check=True)
+    (outer / "other.md").write_text("x")
+    (vault / "a.md").write_text("x")
+    cfg = env["home"] / ".cortex" / "config.json"
+    cfg.write_text(json.dumps({"vault": str(vault)}))
+    r = hook(env, "session-start", {"session_id": "s9"})
+    assert "not saved" not in r.stdout
+
+
+def test_unpushed_commits_flagged(env, tmp_path):
+    seed(env)
+    run(env, "build")
+    remote = tmp_path / "remote.git"
+    subprocess.run(["git", "init", "-q", "--bare", str(remote)], check=True)
+    v = str(env["vault"])
+    subprocess.run(["git", "-C", v, "add", "-A"], check=True)
+    subprocess.run(["git", "-C", v, "commit", "-qm", "a"], check=True)
+    subprocess.run(["git", "-C", v, "remote", "add", "origin", str(remote)], check=True)
+    subprocess.run(["git", "-C", v, "push", "-q", "-u", "origin", "main"], check=True)
+    assert "not on GitHub yet" not in hook(env, "session-start", {"session_id": "u1"}).stdout
+    (env["vault"] / "home.md").write_text("changed")
+    subprocess.run(["git", "-C", v, "commit", "-qam", "b"], check=True)
+    assert "1 saved change(s) not on GitHub yet" in hook(env, "session-start", {"session_id": "u2"}).stdout

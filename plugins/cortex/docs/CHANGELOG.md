@@ -8,6 +8,10 @@ Fixes from the first weeks of real use:
 - Logging saves every page it wrote, even where the hooks did not run (a Claude chat). The start card shows pages written but not yet saved to GitHub.
 - Logging asks about every person and organisation that acted in the session, so people pages fill in.
 - Setup writes the real kit version (it stayed at 0.1.0 before).
+- A page whose header is damaged (first line lost, a byte-order mark from a Windows editor) is reported as broken, never quietly set aside.
+- README.md and CLAUDE.md inside any folder are left alone, as before.
+- The start card also says when saved changes never reached GitHub (a log done offline).
+- "What is on my list" shows your to-dos; "open the sorting desk" now lists loose notes and offers each a home.
 
 ## 0.3.0
 Works in Codex too: Codex plugin manifest and marketplace, hooks handle Codex file edits (apply_patch). The cortex's instructions now live in AGENTS.md (CLAUDE.md and GEMINI.md point to it). Skills use a stable engine copy at ~/.cortex/engine, so they work in any tool.

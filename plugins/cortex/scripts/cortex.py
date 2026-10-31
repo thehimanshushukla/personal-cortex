@@ -35,8 +35,11 @@ HOME = Path.home()
 CONFIG = Path(os.environ.get("CORTEX_CONFIG", HOME / ".cortex" / "config.json"))
 GENERATED = "_cortex"
 SKIP_DIRS = {".git", ".claude", GENERATED, "sources", "_templates", "node_modules"}
-# Instruction and generated files that sit in the vault but are not pages (AGENTS.md and GEMINI.md since 0.3.0).
-NOT_PAGES = {"AGENTS.md", "CLAUDE.md", "GEMINI.md", "home.md", "README.md"}
+# Files that are not pages: README.md and CLAUDE.md in any folder; the vault's own instruction and
+# home files at the root (AGENTS.md and GEMINI.md since 0.3.0).
+NOT_PAGES_ANYWHERE = {"CLAUDE.md", "README.md"}
+NOT_PAGES_AT_ROOT = {"AGENTS.md", "GEMINI.md", "home.md"}
+HEADER_KEY_RE = re.compile(r"^(id|title|type|status|created|updated|summary|area|tags|links):\s")
 
 THING_TYPES = {"session", "decision", "lesson", "insight", "how-to"}
 TYPE_FOLDER = {"session": "sessions", "decision": "decisions", "lesson": "lessons",
@@ -105,9 +108,15 @@ def read_page(path: Path, vault: Path) -> Page:
         text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as e:
         return Page(path, rel, {}, "", [f"cannot read file ({e})"])
+    text = text.lstrip("\ufeff")  # Windows editors add a byte-order mark
+    if text.lstrip().startswith("---"):
+        text = text.lstrip()
     if not text.startswith("---\n"):
+        head = text.splitlines()[:10]
+        if any(l.strip() == "---" or HEADER_KEY_RE.match(l) for l in head):
+            return Page(path, rel, {}, text, ["header is broken - it must start with a line of just ---"])
         # A note with no header at all (an empty Obsidian daily note, a quick scribble) is a loose note:
-        # it waits on the sorting desk instead of stopping the build. A broken header is still an error.
+        # it waits on the sorting desk instead of stopping the build.
         page = Page(path, rel, {}, text, [])
         page.loose = True
         return page
@@ -137,7 +146,7 @@ def iter_pages(vault: Path):
     for root, dirs, files in os.walk(vault):
         dirs[:] = sorted(d for d in dirs if d not in SKIP_DIRS and not d.startswith("."))
         for f in sorted(files):
-            if f.endswith(".md") and not (root == str(vault) and f in NOT_PAGES):
+            if f.endswith(".md") and f not in NOT_PAGES_ANYWHERE and not (root == str(vault) and f in NOT_PAGES_AT_ROOT):
                 p = Path(root) / f
                 yield read_page(p, vault)
 
@@ -192,6 +201,8 @@ def location_errors(page: Page) -> list[str]:
 # ---------------------------------------------------------------- validation
 
 def validate(pages: list[Page], vault: Path, people: set[str]) -> tuple[list[str], list[str]]:
+    me = self_slugs(vault)
+    headerless_people = {Path(rel).stem for rel in loose_notes(vault) if rel.startswith("people/")}
     errors, warnings = [], []
     all_ids = {p.get("id") for p in pages if p.get("id")}
     seen: dict[str, str] = {}
@@ -245,8 +256,13 @@ def validate(pages: list[Page], vault: Path, people: set[str]) -> tuple[list[str
                 pe.append(f"superseded_by '{m['superseded_by']}' does not exist")
             for line in p.body.splitlines():
                 fm = FOLLOWUP_RE.match(line)
-                if fm and fm.group("person") not in people and fm.group("person") != "me":
-                    pe.append(f"follow-up names @{fm.group('person')} but people/{fm.group('person')}.md does not exist")
+                who = fm.group("person") if fm else ""
+                if fm and who in headerless_people:
+                    pe.append(f"follow-up names @{who} but people/{who}.md has no header")
+                elif fm and who not in people and who not in me:
+                    pe.append(f"follow-up names @{who} but people/{who}.md does not exist")
+                elif fm and who in me and fm.group("owner") == "theirs":
+                    warnings.append(f"{p.rel}: '@{who} ... {{theirs}}' reads as owed to yourself - use {{mine}} for your own to-do")
                 elif re.match(r"^\s*-\s\[[ xX]\]\s+@", line) and not fm:
                     warnings.append(f"{p.rel}: follow-up line not in the standard shape: '{line.strip()[:80]}'")
         for e in pe:
@@ -435,7 +451,8 @@ def load_all(vault: Path):
 
 
 def loose_notes(vault: Path) -> list[str]:
-    return [p.rel for p in iter_pages(vault) if getattr(p, "loose", False)]
+    """Header-less notes outside inbox/ (inbox notes are already on the sorting desk)."""
+    return [p.rel for p in iter_pages(vault) if getattr(p, "loose", False) and not p.rel.startswith("inbox/")]
 
 
 def cmd_build(args) -> int:
@@ -468,6 +485,8 @@ def cmd_check(args) -> int:
     errors, warnings = validate(pages, vault, people)
     rels = {p.relative_to(vault).as_posix() for p in wanted if str(p).startswith(str(vault))}
     mine_err = [e for e in errors if e.split(":", 1)[0] in rels]
+    mine_err += [f"{rel}: no header - give it one with 'cortex.py new', or leave it for the sorting desk"
+                 for rel in loose_notes(vault) if rel in rels]
     mine_warn = [w for w in warnings if w.split(":", 1)[0] in rels]
     for w in mine_warn:
         print(f"note: {w}")

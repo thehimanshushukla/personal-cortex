@@ -72,6 +72,8 @@ def sync_engine() -> None:
 
 def unsaved_pages(v: Path) -> int:
     """Pages written but never committed - a log done where the hooks did not run (Claude chat) leaves these."""
+    if not (v / ".git").exists():  # not its own repo: never count files of a parent repo
+        return 0
     try:
         r = subprocess.run(["git", "-C", str(v), "status", "--porcelain", "--untracked-files=all"],
                            capture_output=True, text=True, timeout=5)
@@ -81,6 +83,18 @@ def unsaved_pages(v: Path) -> int:
         return 0
     paths = [line[3:].strip('"') for line in r.stdout.splitlines()]
     return sum(1 for f in paths if f.endswith(".md") and not f.startswith("_cortex/") and f != "home.md")
+
+
+def unpushed_commits(v: Path) -> int:
+    """Commits made locally but never pushed - a log done offline. 0 when there is no GitHub backup."""
+    if not (v / ".git").exists():
+        return 0
+    try:
+        r = subprocess.run(["git", "-C", str(v), "rev-list", "--count", "@{u}..HEAD"],
+                           capture_output=True, text=True, timeout=5)
+    except (OSError, subprocess.SubprocessError):
+        return 0
+    return int(r.stdout.strip()) if r.returncode == 0 and r.stdout.strip().isdigit() else 0
 
 
 def session_start(p: dict) -> int:
@@ -103,9 +117,13 @@ def session_start(p: dict) -> int:
     card = v / "_cortex" / "card.md"
     text = card.read_text() if card.exists() else "Cortex card not built yet."
     unsaved = unsaved_pages(v)
+    unpushed = unpushed_commits(v)
     if unsaved:
-        text += (f"\n{unsaved} page(s) changed but not saved to GitHub yet. Offer once: "
+        text += (f"\n{unsaved} page(s) changed but not saved yet. Offer once: "
                  f"\"say 'back up my cortex' to save them now\".\n")
+    elif unpushed:
+        text += (f"\n{unpushed} saved change(s) not on GitHub yet (last push did not go through). Offer once: "
+                 f"\"say 'back up my cortex' to send them\".\n")
     # Weekly backup safety net: if the scheduled one was missed (Mac asleep), run it now in the background.
     try:
         subprocess.Popen([sys.executable, str(HERE / "cortex.py"), "--vault", str(v), "backup",

@@ -11,7 +11,11 @@ Below, `cortex` means `python3 ~/.cortex/engine/scripts/cortex.py`. The vault pa
 
 ## 1. Show the desk
 
-Read `_cortex/sorting-desk.md` and check each row's inbox file still exists. If the desk is empty, say so, and offer the import skill.
+Run `cortex sort-desk`. It prints the import proposals from `_cortex/sorting-desk.md`, how many notes wait in `inbox/`, and any **loose notes** (pages with no header, such as an empty daily note Obsidian made). Check each proposal row's inbox file still exists.
+
+If there are loose notes, list them after the proposals. For each: if it is empty, offer to archive it (move it to `inbox/` with a header and `status: archived`, never delete); otherwise propose a home and a page type exactly as for imports, and give it a proper header with `cortex new` on the person's yes.
+
+If there are no proposals and no loose notes, say so, and offer the import skill.
 
 Show the rows grouped by proposed area. Inside each area, put **low confidence first**, then medium, then high, so the person looks hardest at the uncertain ones. Keep each row to one line:
 

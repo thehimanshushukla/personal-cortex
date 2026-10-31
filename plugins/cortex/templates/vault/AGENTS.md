@@ -1,4 +1,4 @@
-<!-- cortex:begin v0.1.0 - managed by the cortex plugin; upgrades rewrite only this block -->
+<!-- cortex:begin v0.3.1 - managed by the cortex plugin; upgrades rewrite only this block -->
 # How to work in this cortex
 
 This folder is a cortex: the person's working record, kept as markdown pages and backed up to their private GitHub. Every session starts from the card the start hook shows you. Use it - do not re-ask what it already says.

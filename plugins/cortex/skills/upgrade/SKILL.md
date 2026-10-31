@@ -37,7 +37,7 @@ If the vault has a `CLAUDE.md` that contains the `<!-- cortex:begin` marker, and
 ## 4. Refresh the managed block in AGENTS.md
 
 - Read the vault `AGENTS.md` and the template `~/.cortex/engine/templates/vault/AGENTS.md`.
-- Replace ONLY the text between `<!-- cortex:begin -->` and `<!-- cortex:end -->` in the vault file with the same block from the template. Keep every line outside the markers exactly as it was.
+- Replace ONLY the text from the line starting `<!-- cortex:begin` to the line `<!-- cortex:end -->` in the vault file with the same block from the template (the begin line carries a version and a note, so match its start, not the whole line). Keep every line outside the markers exactly as it was.
 - If the markers are missing or broken in the vault file, do not guess: show the person the problem and ask before adding a fresh block at the top.
 - Show a short summary of what changed in the block (added or removed lines).
 
@@ -49,7 +49,7 @@ If `~/.cortex/engine/migrations/` contains steps numbered above the old version,
 
 1. Set `kit_version: Y` in `kit.yaml` and `"kit_version": "Y"` in `~/.cortex/config.json` (keep other keys).
 2. `python3 ~/.cortex/engine/scripts/cortex.py build` - fix any errors before continuing.
-3. `git -C <vault> add -- AGENTS.md kit.yaml _cortex/` plus any files a migration changed, by name.
+3. `git -C <vault> add -- AGENTS.md kit.yaml home.md _cortex/` plus any files a migration changed, by name.
 4. `git -C <vault> commit -m "upgrade: kit X -> Y"` then `cortex.py backup`.
 5. `cortex.py doctor` and show the result.
 
