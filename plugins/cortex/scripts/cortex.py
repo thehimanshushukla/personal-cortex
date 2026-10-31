@@ -40,6 +40,7 @@ SKIP_DIRS = {".git", ".claude", GENERATED, "sources", "_templates", "node_module
 NOT_PAGES_ANYWHERE = {"CLAUDE.md", "README.md"}
 NOT_PAGES_AT_ROOT = {"AGENTS.md", "GEMINI.md", "home.md"}
 HEADER_KEY_RE = re.compile(r"^(id|title|type|status|created|updated|summary|area|tags|links):\s")
+ANY_KEY_RE = re.compile(r"^[A-Za-z_][\w-]*:(\s|$)")  # any 'key: value' line right after an opening ---
 
 THING_TYPES = {"session", "decision", "lesson", "insight", "how-to"}
 TYPE_FOLDER = {"session": "sessions", "decision": "decisions", "lesson": "lessons",
@@ -109,14 +110,20 @@ def read_page(path: Path, vault: Path) -> Page:
     except (OSError, UnicodeDecodeError) as e:
         return Page(path, rel, {}, "", [f"cannot read file ({e})"])
     text = text.lstrip("\ufeff")  # Windows editors add a byte-order mark
-    if text.lstrip().startswith("---"):
-        text = text.lstrip()
-    if not text.startswith("---\n"):
-        head = text.splitlines()[:10]
-        if any(l.strip() == "---" or HEADER_KEY_RE.match(l) for l in head):
+    head = [l for l in text.splitlines()[:12] if l.strip()]
+    if head and head[0].strip() == "---" and len(head) > 1 and ANY_KEY_RE.match(head[1]):
+        text = text.lstrip()  # a real header after a blank line or a space
+    if not text.startswith("---\n") or not (len(head) > 1 and ANY_KEY_RE.match(head[1])):
+        # Looks like a header that lost its opening ---: two or more header keys before a --- line.
+        keys_before_rule = 0
+        for l in head:
+            if l.strip() == "---":
+                break
+            keys_before_rule += bool(HEADER_KEY_RE.match(l))
+        if keys_before_rule >= 2 and any(l.strip() == "---" for l in head):
             return Page(path, rel, {}, text, ["header is broken - it must start with a line of just ---"])
-        # A note with no header at all (an empty Obsidian daily note, a quick scribble) is a loose note:
-        # it waits on the sorting desk instead of stopping the build.
+        # Anything else with no header (an empty Obsidian daily note, a scribble, a note with a --- divider)
+        # is a loose note: it waits on the sorting desk instead of stopping the build.
         page = Page(path, rel, {}, text, [])
         page.loose = True
         return page
@@ -459,7 +466,11 @@ def cmd_build(args) -> int:
     vault = vault_path(args.vault)
     pages, people = load_all(vault)
     errors, warnings = validate(pages, vault, people)
-    warnings += [f"{rel}: loose note (no header) - left for the sorting desk" for rel in loose_notes(vault)]
+    for rel in loose_notes(vault):
+        tasks = sum(1 for l in (vault / rel).read_text(encoding="utf-8", errors="ignore").splitlines()
+                    if re.match(r"^\s*-\s\[ \]\s+@", l))
+        extra = f"; {tasks} task line(s) not counted until it has a header" if tasks else ""
+        warnings.append(f"{rel}: loose note (no header) - left for the sorting desk{extra}")
     for w in warnings:
         print(f"note: {w}")
     if errors:

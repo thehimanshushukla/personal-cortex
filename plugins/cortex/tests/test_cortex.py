@@ -472,3 +472,23 @@ def test_unpushed_commits_flagged(env, tmp_path):
     (env["vault"] / "home.md").write_text("changed")
     subprocess.run(["git", "-C", v, "commit", "-qam", "b"], check=True)
     assert "1 saved change(s) not on GitHub yet" in hook(env, "session-start", {"session_id": "u2"}).stdout
+
+
+@pytest.mark.parametrize("text", [
+    "Meeting notes\n\n---\n\nmore\n",       # a divider line in an ordinary note
+    "title: my idea for a book\nsome text\n",  # one key-looking line is not a header
+    "---\n\nscribble\n",                      # a divider first, prose after
+])
+def test_ordinary_notes_with_dividers_are_loose(env, text):
+    seed(env)
+    (env["vault"] / "acme" / "note.md").write_text(text)
+    r = run(env, "build")
+    assert r.returncode == 0, r.stdout
+    assert "acme/note.md: loose note" in r.stdout
+
+
+def test_loose_note_with_task_lines_says_so(env):
+    seed(env)
+    (env["vault"] / "acme" / "note.md").write_text("ideas\n- [ ] @me call the venue {mine}\n")
+    r = run(env, "build")
+    assert "1 task line(s) not counted until it has a header" in r.stdout
