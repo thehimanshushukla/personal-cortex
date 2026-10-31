@@ -1,6 +1,6 @@
 ---
 name: board
-description: Open the person's board and inbox in the browser - their to-dos and follow-ups in columns (Overdue, This week, Later, In progress, Waiting on others, Done) and the notes waiting to be filed. Use when the person says "show my board", "open my board", "my board", "what is overdue", "open the inbox", "show me the overdue ones", or the card says "say 'show my board'".
+description: Open the person's board and inbox in the browser - their to-dos and follow-ups in columns (Overdue, This week, Later, In progress, Waiting on others, Done) and the notes waiting to be filed. Use when the person says "show my board", "open my board", "my board", "open the inbox", "show me the overdue ones on the board", or the card says "say 'show my board'".
 ---
 
 # Show my board

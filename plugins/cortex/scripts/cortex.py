@@ -116,12 +116,17 @@ def read_page(path: Path, vault: Path) -> Page:
     except (OSError, UnicodeDecodeError) as e:
         return Page(path, rel, {}, "", [f"cannot read file ({e})"])
     text = text.lstrip("\ufeff")  # Windows editors add a byte-order mark
-    head = [l for l in text.splitlines()[:12] if l.strip()]
+    head = [l for l in text.splitlines()[:12] if l.strip() and not l.lstrip().startswith("#")]
+    after_rule = head[1:4] if head and head[0].strip() == "---" else []
+    # An opening --- starts a header only if a known header key follows, or two 'key: value' lines do;
+    # '---' then 'Agenda: ...' is a scribble.
+    opens_header = bool(after_rule) and (HEADER_KEY_RE.match(after_rule[0]) is not None
+                                         or sum(bool(ANY_KEY_RE.match(l)) for l in after_rule[:2]) == 2)
     lead = 0  # lines dropped before the header, so task line numbers still match the file
-    if head and head[0].strip() == "---" and len(head) > 1 and ANY_KEY_RE.match(head[1]):
+    if opens_header:
         lead = text[:len(text) - len(text.lstrip())].count("\n")
         text = text.lstrip()  # a real header after a blank line or a space
-    if not text.startswith("---\n") or not (len(head) > 1 and ANY_KEY_RE.match(head[1])):
+    if not text.startswith("---\n") or not opens_header:
         # Looks like a header that lost its opening ---: two or more header keys before a --- line.
         keys_before_rule = 0
         for l in head:
