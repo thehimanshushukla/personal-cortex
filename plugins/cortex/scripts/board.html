@@ -5,18 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Cortex board</title>
 <style>
-/* Same three themes as MANSHU: Paper, Blue, Night (values from its globals.css). No choice saved = follows the Mac. */
+/* Three themes: Paper, Blue, Night. No choice saved = follows the Mac. */
 @font-face { font-family: Geist; font-style: normal; font-weight: 100 900; font-display: swap; src: url(/geist.woff2) format("woff2"); }
 :root, :root[data-theme="paper"] {
   --paper: #faf9f5; --paper-2: #f3f1ea; --ink: #1d1c18; --ink-2: #3d3b35; --faint: #716e65; --muted-ink: #5f5c54;
   --line: #e7e4da; --line-2: #efece4; --accent-strong: #d4552b; --surface: #ffffff; --shade: 20,16,8; --hi: rgba(255,255,255,.75);
-  --ember: #b2441f; --ember-tint: rgba(212,85,43,.10); --ok: #2f7d58; --sky: #2f6bd8; --violet: #7a5af0; --amber: #c08a12;
+  --ember: #b2441f; --ember-tint: rgba(212,85,43,.10); --ok: #2f7d58; --sky: #2860c4; --violet: #7a5af0; --amber: #c08a12;
   --glass-bg: rgba(255,255,255,.66); --glass-border: rgba(29,28,24,.08); --btn: #1d1c18; --btn-ink: #faf9f5; --mesh: none;
 }
 :root[data-theme="blue"] {
   --paper: #f8fafc; --paper-2: #f1f5f9; --ink: #0f172a; --ink-2: #334155; --faint: #64748b; --muted-ink: #4f5d73;
   --line: #e2e8f0; --line-2: #edf1f6; --accent-strong: #3b82f6; --surface: #ffffff; --shade: 15,23,42; --hi: rgba(255,255,255,.75);
-  --ember: #c2481f; --ember-tint: rgba(212,85,43,.10); --ok: #2f7d58; --sky: #2f6bd8; --violet: #7a5af0; --amber: #c08a12;
+  --ember: #b2441f; --ember-tint: rgba(212,85,43,.10); --ok: #2f7d58; --sky: #2860c4; --violet: #7a5af0; --amber: #c08a12;
   --glass-bg: rgba(255,255,255,.62); --glass-border: rgba(15,23,42,.07); --btn: #2f6bd8; --btn-ink: #ffffff;
   --mesh: radial-gradient(ellipse at 20% 50%, rgba(59,130,246,.04) 0%, transparent 50%), radial-gradient(ellipse at 80% 20%, rgba(139,92,246,.03) 0%, transparent 50%), radial-gradient(ellipse at 40% 80%, rgba(6,182,212,.02) 0%, transparent 50%);
 }
@@ -34,12 +34,13 @@ body { font: 17px/1.5 Geist, -apple-system, BlinkMacSystemFont, "Segoe UI", Helv
   transition: background-color .4s cubic-bezier(.22,1,.36,1), color .4s cubic-bezier(.22,1,.36,1); }
 header { padding: 18px 20px 10px; display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; }
 h1 { font-size: 26px; margin: 0; font-weight: 600; letter-spacing: -.01em; }
-.tabs, .themes { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--line); border-radius: 12px; }
+.tabs, .themes { display: inline-flex; flex-wrap: wrap; max-width: 100%; gap: 2px; padding: 3px; border: 1px solid var(--line); border-radius: 12px; }
 .themes { margin-left: auto; }
 .tabs button, .themes button { font: inherit; font-size: 16px; border: 0; border-radius: 9px; background: transparent; color: var(--muted-ink);
   padding: 6px 14px; min-height: 38px; cursor: pointer; }
 .tabs button:hover, .themes button:hover { color: var(--ink); }
 .tabs button[aria-selected="true"], .themes button[aria-pressed="true"] { background: var(--btn); color: var(--btn-ink); }
+select { max-width: 100%; min-width: 0; }
 .btn, select { font: inherit; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink);
   padding: 8px 14px; min-height: 44px; cursor: pointer; }
 .btn:hover { border-color: var(--faint); }
@@ -47,7 +48,7 @@ h1 { font-size: 26px; margin: 0; font-weight: 600; letter-spacing: -.01em; }
 .btn:disabled { opacity: .5; cursor: default; }
 :focus-visible { outline: 3px solid var(--accent-strong); outline-offset: 2px; }
 .bar { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; padding: 0 20px 14px; }
-.bar label { color: var(--muted-ink); font-size: 16px; display: flex; gap: 8px; align-items: center; }
+.bar label { color: var(--muted-ink); font-size: 16px; display: flex; gap: 8px; align-items: center; min-width: 0; max-width: 100%; }
 #msg { margin: 0 20px 12px; padding: 12px 16px; border-radius: 10px; border: 1px solid color-mix(in srgb, var(--amber) 30%, transparent);
   background: color-mix(in srgb, var(--amber) 11%, transparent); color: var(--ink); display: none; }
 #msg.show { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
@@ -82,7 +83,7 @@ main { padding: 0 20px 40px; }
 .card.dragging { opacity: .5; }
 .card .text { font-size: 16px; font-weight: 500; color: var(--ink-2); line-height: 1.4; margin: 0 0 8px; overflow-wrap: anywhere; }
 .card .meta { display: flex; flex-wrap: wrap; gap: 6px; font-size: 13px; color: var(--muted-ink); margin-bottom: 8px; align-items: center; }
-.chip { background: var(--paper-2); border: 1px solid var(--line); color: var(--ink-2); border-radius: 999px; padding: 1px 9px; font-weight: 500; }
+.chip { background: var(--paper-2); border: 1px solid var(--line); color: var(--ink-2); border-radius: 999px; padding: 1px 9px; font-weight: 500; overflow-wrap: anywhere; min-width: 0; }
 .chip.late { background: var(--ember-tint); border-color: transparent; color: var(--ember); font-weight: 600; }
 .chip.doing { background: color-mix(in srgb, var(--sky) 11%, transparent); border-color: transparent; color: var(--sky); }
 .card select { width: 100%; font-size: 15px; min-height: 40px; padding: 6px 10px; }
@@ -98,7 +99,7 @@ main { padding: 0 20px 40px; }
   box-shadow: -6px 0 24px rgba(var(--shade),.14); padding: 18px 20px 30px; overflow-y: auto; display: none; z-index: 10; }
 #drawer.open { display: block; }
 #drawer:focus { outline: none; }
-#drawer h2 { font-size: 21px; font-weight: 600; margin: 0 40px 6px 0; }
+#drawer h2 { font-size: 21px; font-weight: 600; margin: 0 76px 6px 0; overflow-wrap: anywhere; }
 #drawer .close { position: absolute; top: 14px; right: 14px; }
 #drawer .line { font-family: ui-monospace, Menlo, monospace; font-size: 14px; background: var(--paper-2);
   border-radius: 8px; padding: 10px; overflow-wrap: anywhere; white-space: pre-wrap; }
@@ -183,9 +184,20 @@ main { padding: 0 20px 40px; }
     var dark = window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches;
     document.documentElement.setAttribute("data-theme", choice === "system" ? (dark ? "night" : "paper") : choice);
     themeButtons(choice);
-    fetch("/api/theme", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ theme: choice }) }).catch(function () {});
+    themeChoice = choice;
+    api("POST", "/api/theme", { theme: choice }).then(function (r) {
+      if (r.status === 0) { say(r.message); clearTimeout(say.t); }
+      else if (r.status !== 200) say("Could not save that look, so it lasts only until this page reloads.");
+    });
   }
-  themeButtons(document.documentElement.getAttribute("data-choice") || "system");
+  var themeChoice = document.documentElement.getAttribute("data-choice") || "system";
+  themeButtons(themeChoice);
+  if (window.matchMedia) {
+    var darkMac = matchMedia("(prefers-color-scheme: dark)");
+    if (darkMac.addEventListener) darkMac.addEventListener("change", function (e) {
+      if (themeChoice === "system") document.documentElement.setAttribute("data-theme", e.matches ? "night" : "paper");
+    });
+  }
   document.querySelectorAll("[data-theme-choice]").forEach(function (b) {
     b.addEventListener("click", function () { setTheme(b.getAttribute("data-theme-choice")); });
   });
@@ -213,8 +225,8 @@ main { padding: 0 20px 40px; }
   function load(note) {
     return api("GET", "/api/state").then(function (s) {
       // No answer at all means the board stopped, not that a page is broken. Keep the note up: nothing works until it is reopened.
-      if (s.status === 0) { showProblems([]); say(s.message); clearTimeout(say.t); return false; }
-      if (s.status !== 200) { showProblems([s.message || "could not read your cortex."]); return false; }
+      if (s.status === 0 || s.status === 403) { showProblems([]); say(s.message || "This board link has expired. Say 'show my board' to open it again."); clearTimeout(say.t); return false; }
+      if (s.status !== 200 || !Array.isArray(s.items)) { showProblems([s.message || "could not read your cortex."]); return false; }
       state = s;
       fillFilters();
       showProblems(s.problems || []);
@@ -342,7 +354,7 @@ main { padding: 0 20px 40px; }
       } else if (r.status === 409 || r.status === 404) {
         closeDrawer(); load(r.message || "This page changed - reloaded.");
       } else {
-        load().then(function () { say(r.message || "That move did not work."); });
+        load().then(function (ok) { if (ok) say(r.message || "That move did not work."); });
       }
     });
   }
@@ -357,7 +369,7 @@ main { padding: 0 20px 40px; }
   function doUndo() {
     api("POST", "/api/undo", {}).then(function (r) {
       closeDrawer();
-      load().then(function () { say(r.message || "Undo did not work.", r.ok ? (r.note ? "note" : true) : false); });
+      load().then(function (ok) { if (ok) say(r.message || "Undo did not work.", r.ok ? (r.note ? "note" : true) : false); });
     });
   }
 
