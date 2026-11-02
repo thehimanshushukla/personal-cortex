@@ -362,7 +362,7 @@ def test_prompt_encoding_round_trip(env, srv):
 
 
 def test_prompt_length_bound():
-    vault = Path("/Users/dan/my cortex")
+    vault = Path("/Users/alex/my cortex")
     t = {"raw": "- [ ] @me " + "a%&#\u2764" * 6000, "due": "", "owner": "mine", "person": "me"}
     p = B.task_prompt(t, "T%" * 5000, "x/%" * 3000, vault)
     link = B.encoded_link(p, vault)
@@ -378,10 +378,10 @@ def test_prompt_length_bound():
     ip = B.inbox_prompt("inbox/" + "%" * 20000 + ".md", "T", vault)
     assert ip.endswith(B.INBOX_ASK) and len(B.encoded_link(ip, vault)) <= B.URL_LIMIT
     for text in ("%" * 20000, "a" * 20000, "\u2764\ufe0f&#\n" * 3000, "ok"):
-        link = B.claude_link(text, Path("/Users/dan/my cortex"))
+        link = B.claude_link(text, Path("/Users/alex/my cortex"))
         assert len(link) <= B.URL_LIMIT
         q = urllib.parse.parse_qs(urllib.parse.urlsplit(link).query)
-        assert text.startswith(q["q"][0]) and q["folder"][0] == "/Users/dan/my cortex"
+        assert text.startswith(q["q"][0]) and q["folder"][0] == "/Users/alex/my cortex"
         assert not re.search(r"%(?![0-9A-F]{2})", link.split("?", 1)[1])     # no half escape anywhere
     assert len(B.claude_link("%" * 20000, Path("/v"))) > B.URL_LIMIT - 3       # fills the room it has
     q = urllib.parse.parse_qs(urllib.parse.urlsplit(B.claude_link("a" * 20000, Path("/v"))).query)
