@@ -755,3 +755,14 @@ def test_engine_copy_has_the_version_file(tmp_path, monkeypatch):
     shutil.rmtree(tmp_path / "engine/.claude-plugin")    # same marker, version file gone: copied again
     H.sync_engine()
     assert (tmp_path / "engine/.claude-plugin/plugin.json").exists()
+
+
+def test_a_private_own_to_do_is_not_told_to_add_a_name():
+    me = {"me"}
+    now = dt.date(2026, 11, 2)
+    with pytest.raises(B.Refused) as refused:
+        B.edit_line("- [ ] @me Waiting on sol-ng, who owes this: pay {private} {mine}", "waiting", me, now)
+    assert "private to-do" in refused.value.message and "name" not in refused.value.message
+    with pytest.raises(B.Refused) as plain:
+        B.edit_line("- [ ] @me plan the day {mine}", "waiting", me, now)
+    assert "Who is it waiting on?" in plain.value.message

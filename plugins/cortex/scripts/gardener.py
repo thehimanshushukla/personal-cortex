@@ -18,6 +18,7 @@ from __future__ import annotations
 import collections
 import datetime as dt
 import fcntl
+import hashlib
 import json
 import os
 import re
@@ -25,6 +26,7 @@ import stat
 import subprocess
 import sys
 import time
+import unicodedata
 from pathlib import Path
 from xml.sax.saxutils import escape
 
@@ -38,6 +40,9 @@ WARN_DAYS = 21              # warn when an unlogged session is this old
 FRESH_SECONDS = 600         # a file changed in the last 10 minutes may be a chat still going
 MIN_USER_MESSAGES = 3
 CONTINUED_MESSAGES = 10     # this many typed messages after a session was logged make it worth listing again
+COPY_GAP = 2                # an exact copy of a session may differ from it by this many typed messages
+ELSEWHERE_DAYS = 7          # the card and the board count sessions elsewhere over the same days
+ELSEWHERE_EVERY = 7 * 86400 # the card says it at most this often
 TITLE_CHARS = 80
 READ_CHARS = 2000           # titles are cut from this much of the first request
 MENTION_CHARS = 20000
@@ -51,7 +56,7 @@ WEEK_IDS = 200              # ids the start hook checks; only a bound, far above
 SUMMARY_VAULTS = 8          # the summary keeps this many vaults, the most recently counted
 METADATA_BYTES = 64 * 1024  # a metadata-only file is this small; anything bigger is reported as not understood
 METADATA_LINES = 20
-CACHE_VERSION = 2           # bumped when a row's meaning changes, so old rows and titles are read again
+CACHE_VERSION = 3           # bumped when a row's meaning changes, so old rows and titles are read again
 AUTOMATION_MARK = "[CORTEX_AUTOMATION]"   # how the kit's own automated prompts start
 SCOPES = {"cortex", "all", "off"}
 SESSION_ENVS = ("CLAUDE_CODE_SESSION_ID", "CODEX_THREAD_ID")   # set inside a running session
@@ -106,7 +111,7 @@ def write_private(path: Path, text: str) -> None:
 
 # ---------------------------------------------------------------- titles
 
-# What looks like a secret, tried on the text before it is cut, so a cut can never leave half of one.
+# Shapes that look like a secret.
 _VALUE = r"""(?:"[^"]*"|'[^']*'|\S+)"""
 _KEYWORD = r"password|passwd|pwd|passphrase|secret|token|auth[-_]?key|api[-_ ]?key|access[-_ ]?key|private[-_ ]?key|credentials?"
 SECRET_RES = [
@@ -144,6 +149,17 @@ SHELL_RE = re.compile(r"\$\([^()]*\)|\$\{[^{}]*\}")
 LONG_TOKEN_RE = re.compile(r"[A-Za-z0-9_+=/-]{32,}")
 MIXED_TOKEN_RE = re.compile(r"\b(?=[A-Za-z0-9]*\d)(?=[A-Za-z0-9]*[A-Za-z])[A-Za-z0-9]{20,}\b")
 TAG_RE = re.compile(r"</?[A-Za-z_!?][^<>]{0,200}>")
+# Any of these anywhere hides a whole title. It errs towards hiding: "pass the deck to Sam" goes too.
+SECRET_WORD_RE = re.compile(r"""(?ix)
+    p[a@4]ssw[o0]rd | passwd | passcode | passphrase | secret | token | credential | cookie | bearer
+  | api [-_\s]? key | (?:private|access|auth|ssh|signing|encryption) [-_\s]? key
+  | key \s* = | (?<![a-z]) key \s* :
+  | (?<![a-z]) (?: pass | pwd? | pins? | o?auth (?: n | z | enticat\w* | ori[sz]\w* )? ) (?![a-z])
+  | \bbasic \s+ [a-z0-9+/=]{8,}
+  | (?<![\w-]) -p \s* \S
+""")
+SECRET_CAMEL_RE = re.compile(r"[a-z0-9](?:Pass|Pwd?|Pin|Auth)(?![a-z])|[A-Z]{2,}PASS(?![A-Za-z])")
+BASE64_RE = re.compile(r"\b(?=[A-Za-z0-9+]*[a-z])(?=[A-Za-z0-9+]*[A-Z])[A-Za-z0-9+]{24,}|[A-Za-z0-9+/]{16,}={1,2}")
 CONTROL_RE = re.compile(r"[\x00-\x1f\x7f-\x9f​-‏ -‮⁠-⁯﻿]+")
 
 
@@ -161,10 +177,27 @@ def _no_shell(s: str) -> str:
     return s.replace("$(", " ").replace("${", " ").replace("`", " ")
 
 
+def looks_secret(text: str) -> bool:
+    """A secret-related word or shape anywhere. Taken from a part of a title, a secret can always survive
+    in a form no pattern knows, so the answer is for the whole title. A best effort, not a guarantee."""
+    plain = unicodedata.normalize("NFKC", text)
+    for s in (CONTROL_RE.sub(" ", plain), CONTROL_RE.sub("", plain)):      # an invisible character splits no word
+        if SECRET_WORD_RE.search(s) or SECRET_CAMEL_RE.search(s) or BASE64_RE.search(s) or WHOLE_TITLE_RE.search(s):
+            return True
+        if any(rx.search(s) for rx in SECRET_RES):
+            return True
+        if MIXED_TOKEN_RE.search(s) or any(re.search(r"\d", m) for m in LONG_TOKEN_RE.findall(s)):
+            return True
+    return False
+
+
 def clean_title(text, limit: int = TITLE_CHARS, is_path: bool = False) -> str:
     """One short plain line: no line breaks, no markup that could read as a tag, nothing that could run
-    as a command, nothing like a secret. In doubt the whole title goes. A folder path comes from the tool,
-    not from typing, so a long path with a digit in it stays readable."""
+    as a command. A title with anything like a secret in it is hidden whole, tested on the text before it
+    is cut, so a cut can never leave half of one. A folder path comes from the tool, not from typing, so
+    only the secret itself comes out of it and a long path with a digit in it stays readable."""
+    if not is_path and looks_secret(str(text)[:READ_CHARS]):
+        return HIDDEN_TITLE
     s = CONTROL_RE.sub(" ", str(text)[:READ_CHARS])
     s = _no_shell(TAG_RE.sub(" ", s).replace("<", " ").replace(">", " "))
     if WHOLE_TITLE_RE.search(s):
@@ -240,6 +273,14 @@ class Reader:
         # When the last typed messages were sent, enough to tell if many came after a session was logged.
         self.times = collections.deque(maxlen=CONTINUED_MESSAGES)
         self.event_times = collections.deque(maxlen=CONTINUED_MESSAGES)
+        # A one-way fingerprint of all typed messages so far, for the last few messages. Enough to tell
+        # whether one session is an exact copy of another, and it holds no words.
+        self.prints = collections.deque(maxlen=COPY_GAP + 1)
+        self.event_prints = collections.deque(maxlen=COPY_GAP + 1)
+
+    def note_print(self, prints, text: str) -> None:
+        last = prints[-1] if prints else ""
+        prints.append(hashlib.sha256(f"{last}\0{text}".encode("utf-8", "replace")).hexdigest()[:16])
 
     def note_time(self, times, value) -> None:
         when = parse_time(value)
@@ -300,6 +341,7 @@ class Reader:
             self.first = self.first or text
             self.note_text(text)
             self.note_time(self.times, e.get("timestamp"))
+            self.note_print(self.prints, text)
 
     def codex(self, e: dict) -> None:
         kind = e.get("type")
@@ -326,6 +368,7 @@ class Reader:
                 self.first_event = self.first_event or text
                 self.note_text(text)
                 self.note_time(self.event_times, e.get("timestamp"))
+                self.note_print(self.event_prints, text)
         elif kind == "response_item" or kind == "message":
             item = p if kind == "response_item" else e
             if item.get("type") == "message" and item.get("role") == "user":
@@ -335,6 +378,7 @@ class Reader:
                     self.first = self.first or text
                     self.note_text(text)
                     self.note_time(self.times, e.get("timestamp"))
+                    self.note_print(self.prints, text)
             elif item.get("type") in ("function_call", "local_shell_call", "custom_tool_call"):
                 self.note_tool(item)
 
@@ -394,6 +438,7 @@ def read_transcript(path: str, source: str, marks: list[str], deadline: float) -
         return None
     users, first = (r.events, r.first_event) if r.events else (r.users, r.first)
     times = r.event_times if r.events else r.times
+    prints = r.event_prints if r.events else r.prints
     folder = _folder_name(r.cwd, path, source)
     kind = "session"
     if not any_line:
@@ -409,7 +454,8 @@ def read_transcript(path: str, source: str, marks: list[str], deadline: float) -
         kind = "unknown"
     return {"kind": kind, "users": users, "title": clean_title(first) if first else "",
             "first_time": r.first_time, "folder": folder, "in_vault": r.in_vault, "touched": r.touched,
-            "truncated": out["truncated"], "clock_cut": out["clock_cut"], "times": list(times), "fork_of": r.fork_of}
+            "truncated": out["truncated"], "clock_cut": out["clock_cut"], "times": list(times), "fork_of": r.fork_of,
+            "prints": list(prints)}
 
 
 def _is_bookkeeping(e) -> bool:
@@ -422,13 +468,14 @@ def good_row(hit, mtime, size) -> bool:
     if not isinstance(hit, dict) or hit.get("mtime") != mtime or hit.get("size") != size:
         return False
     number = lambda v: type(v) in (int, float)  # noqa: E731
-    first, times = hit.get("first_time"), hit.get("times")
+    first, times, prints = hit.get("first_time"), hit.get("times"), hit.get("prints")
     return (isinstance(hit.get("kind"), str) and type(hit.get("users")) is int
             and isinstance(hit.get("title"), str) and isinstance(hit.get("folder"), str)
             and isinstance(hit.get("fork_of"), str)
             and all(type(hit.get(k)) is bool for k in ("in_vault", "touched", "truncated"))
             and (first is None or (number(first) and 946684800 <= first <= 4102444800))
-            and isinstance(times, list) and all(number(t) for t in times))
+            and isinstance(times, list) and all(number(t) for t in times)
+            and isinstance(prints, list) and all(isinstance(p, str) for p in prints))
 
 
 # ---------------------------------------------------------------- finding transcripts
@@ -537,6 +584,11 @@ def scope_of(vault: Path) -> str:
     return v if isinstance(v, str) and v in SCOPES else "cortex"
 
 
+def elsewhere_off(vault: Path) -> bool:
+    """gardener_elsewhere: off in kit.yaml: sessions elsewhere are not mentioned at all."""
+    return str(C.parse_kit(vault).get("gardener_elsewhere", "")).strip().lower() == "off"
+
+
 def vault_marks(vault: Path) -> list[str]:
     marks = [str(vault)]
     try:
@@ -573,6 +625,30 @@ def set_dismissed(sid: str, on: bool) -> None:
         write_private(d / "state.json", json.dumps(state))
         if on:     # the start card must agree at once, not after the next scan
             _take_off_summary(d, sid)
+
+
+def claim_elsewhere_line(vault: Path, now: float | None = None) -> bool:
+    """May the start card say how many sessions elsewhere were not checked? At most once a week per
+    vault, recorded before it is said. When that cannot be recorded, it is not said."""
+    if elsewhere_off(vault):
+        return False
+    now = time.time() if now is None else now
+    d = state_dir()
+    with (d / "state.lock").open("w") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)    # a session start never waits on this
+        except OSError:
+            return False
+        state = load_state()
+        shown = state.get("elsewhere_shown") if isinstance(state.get("elsewhere_shown"), dict) else {}
+        shown = {k: v for k, v in shown.items() if type(v) in (int, float)}
+        last = shown.get(vault_key(vault))
+        if last is not None and 0 <= now - last < ELSEWHERE_EVERY:      # a date ahead of the clock counts for nothing
+            return False
+        shown[vault_key(vault)] = now
+        state["elsewhere_shown"] = dict(sorted(shown.items(), key=lambda kv: kv[1])[-SUMMARY_VAULTS:])
+        write_private(d / "state.json", json.dumps(state))
+    return True
 
 
 def _take_off_summary(d: Path, sid: str) -> None:
@@ -672,44 +748,48 @@ def scan(vault: Path, budget: float, now: float) -> tuple[list[dict], dict]:
     return rows, info
 
 
-def collapse_forks(rows: list[dict]) -> None:
-    """A fork starts as a copy of another session, so the pair is one piece of work: one row stands for
-    both, the one with the most messages. A copy shows by its first message, same text at the same
-    moment, or by the fork's own note of where it came from when the file has one."""
-    live = [r for r in rows if r.get("id") and r["status"] in ("missed", "covered", "dismissed", "other_folder")]
-    by_id = {r["id"]: r for r in live}
-    link = {i: i for i in by_id}
+def _is_copy(longer: dict, shorter: dict) -> bool:
+    """The shorter session's typed messages are the longer one's first messages, and at most COPY_GAP are
+    added. One that goes on for longer, or changes direction, is its own work."""
+    gap = longer["users"] - shorter["users"]
+    prints, own = longer.get("prints") or [], shorter.get("prints") or []
+    return 0 <= gap <= COPY_GAP and gap < len(prints) and bool(own) and prints[-1 - gap] == own[-1]
 
-    def root(i):
-        while link[i] != i:
-            link[i] = link[link[i]]
-            i = link[i]
-        return i
-    first_seen: dict[tuple, str] = {}
-    for r in live:
-        if r.get("first_time"):
-            other = first_seen.setdefault((r["source"], r["first_time"], r.get("title")), r["id"])
-            link[root(r["id"])] = root(other)
-        if r.get("fork_of") in by_id:
-            link[root(r["id"])] = root(r["fork_of"])
-    groups: dict[str, list[dict]] = {}
-    for r in live:
-        groups.setdefault(root(r["id"]), []).append(r)
-    for group in groups.values():
+
+def _same_start(a: dict, b: dict) -> bool:
+    """They began as one: the same first moment, or the file's own note of where it was forked from.
+    The same words typed at another moment are two sessions."""
+    if a.get("first_time") and a.get("first_time") == b.get("first_time"):
+        return True
+    x, y = a.get("fork_of"), b.get("fork_of")
+    return x == b["id"] or y == a["id"] or (bool(x) and x == y)
+
+
+def collapse_forks(rows: list[dict]) -> None:
+    """Only an exact copy shares a row, with the session it copies, the one with the most messages. Any
+    other fork is listed by itself. A dismissed session takes no part: a dismissal is for one id only.
+    Nor does a file not read to its end, as its count cannot be trusted."""
+    live = [r for r in rows if r.get("id") and r["status"] in ("missed", "covered", "other_folder") and not r.get("truncated")]
+    groups: list[list[dict]] = []
+    heads: dict[tuple, list[list[dict]]] = {}
+    for r in sorted(live, key=lambda r: (r["users"], r["mtime"]), reverse=True):
+        last = (r.get("prints") or [""])[-1]
+        group = next((g for g in heads.get((r["source"], last), []) if _is_copy(g[0], r) and _same_start(g[0], r)), None)
+        if group:
+            group.append(r)
+            continue
+        groups.append([r])
+        for p in r.get("prints") or []:
+            heads.setdefault((r["source"], p), []).append(groups[-1])
+    for group in groups:
         if len(group) < 2:
             continue
-        keep = max(group, key=lambda r: (r["users"], r["mtime"]))
+        keep = group[0]
         logged = [r for r in group if r["status"] == "covered"]
-        dismissed = any(r["status"] == "dismissed" for r in group)
-        keep["also"] = [r["path"] for r in group if r is not keep]
-        for r in group:
-            if r is not keep:
-                r["status"] = "fork_copy"
-        if keep["status"] == "covered":
-            continue
-        if dismissed:
-            keep["status"] = "dismissed"
-        elif logged:
+        keep["also"] = [r["path"] for r in group[1:]]
+        for r in group[1:]:
+            r["status"] = "fork_copy"
+        if keep["status"] != "covered" and logged:
             if continued_after(keep, max(r.get("cover_at", 0) for r in logged)):
                 keep["status"], keep["continued"] = "missed", True
             else:
@@ -772,6 +852,7 @@ def inventory(vault: Path, days: int = 7, budget: float = CLI_SECONDS, now: floa
     asked = days
     days = max(0, min(days, MAX_DAYS))
     rows, info = scan(vault, budget, now)
+    quiet = elsewhere_off(vault)
     since = now - (days + OVERLAP_DAYS) * 86400
     window = [r for r in rows if r["mtime"] >= since]
     count = lambda status: sum(1 for r in window if r["status"] == status)  # noqa: E731
@@ -788,18 +869,19 @@ def inventory(vault: Path, days: int = 7, budget: float = CLI_SECONDS, now: floa
         "scope": info["scope"], "window_days": days + OVERLAP_DAYS,
         "days_asked": asked, "days_cut": asked > days, "too_old": info["too_old"],
         "missed": newest_first("missed", window),
-        "elsewhere": newest_first("other_folder", window),
+        "elsewhere": [] if quiet else newest_first("other_folder", window),
         "dismissed_rows": newest_first("dismissed", rows),
         "older_missed": sum(1 for r in missed_all if r["mtime"] < since),
         "covered": sum(routes.values()), "covered_by": routes, "dismissed": count("dismissed"),
-        "other_folders": count("other_folder"),
+        "other_folders": 0 if quiet else count("other_folder"),
         "skipped": {"too_recent": count("too_recent"), "subagent": count("subagent"), "short": count("short"),
                     "automated": count("automated"), "fork_copies": count("fork_copy")},
         "unreadable": count("unknown"), "not_finished": info["not_finished"],
         "warning": risk_warning(oldest, now) if at_risk else "",
     }
     week = [r for r in missed_all if r["mtime"] >= now - 7 * 86400]
-    away = [r for r in rows if r["status"] == "other_folder" and r["mtime"] >= now - 7 * 86400]
+    away = [] if quiet else [r for r in rows if r["status"] == "other_folder" and r["mtime"] >= now - ELSEWHERE_DAYS * 86400]
+    report["elsewhere_week"] = len(away)     # the number the card and the board both say
     # The only file the start hook reads: counts and ids, no titles, so no chat text reaches the card.
     # A continued session keeps its logged flag, so the hook must not take it off the count for that.
     write_summary(vault, {

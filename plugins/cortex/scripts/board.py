@@ -117,6 +117,9 @@ def column_of(t: dict, now: dt.date) -> str | None:
     return "later"
 
 
+PRIVATE_TAG_RE = re.compile(r"\{\s*private\s*\}", re.I)
+
+
 class Refused(Exception):
     def __init__(self, code: int, message: str):
         super().__init__(message)
@@ -150,6 +153,10 @@ def edit_line(line: str, target: str, me: set[str], now: dt.date) -> str:
             box = " "
             set_date("done", None)
         if target == "waiting":
+            if m.group("person") in me and PRIVATE_TAG_RE.search(line):
+                # A name on a private line would need a page for that person, and the page shows the name.
+                raise Refused(400, "This private to-do stays on your own list, so it cannot move to Waiting "
+                              "on others. Use This week, Later or In progress instead.")
             if m.group("person") in me:
                 raise Refused(400, "Who is it waiting on? This is your own to-do (@"
                               + m.group("person") + "). Ask Claude to put the person's name on it, "
@@ -373,7 +380,7 @@ class Board:
         out = {"desk": [], "notes": [], "loose": [], "unsaved": [], "git": (v / ".git").exists(),
                "missed": [], "missed_note": ""}
         try:
-            report = G.inventory(v, days=30, budget=GARDENER_SECONDS) if self.gardener else {"missed": [], "warning": "", "not_finished": 0, "other_folders": 0}
+            report = G.inventory(v, days=30, budget=GARDENER_SECONDS) if self.gardener else {"missed": [], "warning": "", "not_finished": 0, "elsewhere_week": 0}
             for r in report["missed"]:
                 iid, prompt = make_id("inbox", "missed", r["id"]), missed_prompt(r, v)
                 self.ids[iid] = ("missed", r["id"], prompt)
@@ -383,8 +390,8 @@ class Board:
             notes = [report["warning"]] if report["warning"] else []
             if report["not_finished"]:
                 notes.append(f"Still reading {report['not_finished']} session file(s): refresh in a moment.")
-            if report["other_folders"]:
-                notes.append(G.elsewhere_line(report["other_folders"]))
+            if report["elsewhere_week"]:
+                notes.append(G.elsewhere_line(report["elsewhere_week"]))
             out["missed_note"] = " ".join(notes)
         except Exception as e:  # the rest of the Inbox still works
             problems.append(f"could not check for unlogged sessions ({e}).")

@@ -1667,6 +1667,30 @@ def test_tasks_under_a_private_section_stay_tasks_in_that_section(env, server):
     assert engine == base[0] + 3 and chat == base[1] and hidden == 3 and board == base[3] + 3
 
 
+def test_a_hand_edited_private_mention_stays_a_tracked_private_to_do(env, server):
+    seed(env)
+    base = open_counts(env, server)
+    proposal(env, "Mention", follow="- [ ] @Dana Cole tagged one {private} {mine}\n", private=(
+        "- [ ] @Zed Quill send the deck (due 2020-05-05) {mine}\n- [ ] @Zed Quill pays me {theirs}\n- [ ] @Rae no owner here\n"
+        "- [x] @Zed Quill closed one {mine}\n- [ ] @Alex-Rivera known person {mine}\n```\n- [ ] @Fenced Name words {mine}\n```\n"))
+    reply = server.ok("cortex_accept", id="chat-mention", area="acme")
+    assert "Zed" not in reply and "Dana" not in reply and "Rae" not in reply
+    assert "5 private item(s) are tracked" in reply and "5 private item(s) named someone" in reply
+    filed = filed_page(env, "mention")
+    assert "- [ ] @me Follow up with Dana Cole: tagged one {private} {mine}" in filed
+    private = filed[filed.index("## Private"):]
+    assert "- [ ] @me Follow up with Zed Quill: send the deck {private} (due 2020-05-05) {mine}" in private
+    assert "- [ ] @me Waiting on Zed Quill, who owes this: pays me {private} {mine}" in private
+    assert "- [ ] @me Follow up with Rae: no owner here {private} {mine}" in private
+    assert "- [x] @me Follow up with Zed Quill: closed one {private} {mine}" in private
+    assert "- [ ] @alex-rivera known person {private} {mine}" in private
+    assert "- Private\n" not in filed and "\n- ## Private" not in filed and filed.count("## Private") == 1
+    assert "@Zed" not in filed and "- [ ] @me Follow up with Fenced" not in filed
+    assert not list((env["vault"] / "people").glob("zed*")) and "Build OK" in build(env)
+    assert open_counts(env, server)[2] == 5
+    hidden_everywhere(env, server, "Zed Quill", f"session-acme-{DAY}-mention")
+
+
 def test_the_board_counts_filed_private_tasks_like_the_engine(env, server):
     seed(env)
     proposal(env, "Board", "- [ ] @ghost-person board promise {private} {mine}\n- [ ] @me board rent {mine} {private}\n")

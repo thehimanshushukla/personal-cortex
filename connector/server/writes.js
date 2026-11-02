@@ -114,6 +114,20 @@ function untaggedTask(line) {
   return V.matchTask(bare) ? bare : null;
 }
 
+// A task line typed by hand whose mention the kit's grammar cannot read: @Sol Ng, capitalised or two words,
+// maybe with no owner. Its name is the first word and the capitalised words after it. Otherwise null.
+function looseMention(line) {
+  const m = /^\s*-\s\[([ xX])\]\s+@(\S.*)$/.exec(line.replace(TAG_AND_SPACES, ' ').trim());
+  if (!m) return null;
+  const owned = /\{(?:mine|theirs)\}(?:\s*\{doing\})?\s*$/.test(m[2]) ? m[2] : `${m[2]} {mine}`;
+  const read = V.matchTask(`- [${m[1]}] @x ${owned}`) || V.matchTask(`- [${m[1]}] @x . ${owned}`);
+  if (!read) return null;
+  const words = read.text.trim().split(/\s+/).filter((w) => w !== '.');
+  let cut = 1;
+  while (cut < words.length && /^\p{Lu}/u.test(words[cut])) cut += 1;
+  return { ...read, name: words.slice(0, cut).join(' '), text: words.slice(cut).join(' ') };
+}
+
 // One task line in the kit's grammar: - [ ] @person what (due D) (added D) {owner}
 function taskLine(given, me, self) {
   if (given === null || typeof given !== 'object' || Array.isArray(given)) throw new UserError('A to-do must have separate fields: what, person, due, owner.');
@@ -448,7 +462,9 @@ function accept(args) {
     for (const line of sections['Follow-ups']) {
       const hiddenTask = isPublic(line) ? null : untaggedTask(line);
       const task = V.parseTask(line, me);
+      const hiddenLoose = isPublic(line) || hiddenTask ? null : looseMention(line);
       if (hiddenTask) rows.push({ hiddenTask });
+      else if (hiddenLoose) rows.push({ hiddenLoose });
       else if (task && SLUG_RE.test(task.person)) rows.push({ task: line });
       else if (clean(line)) rows.push({ note: clean(line) });
     }
@@ -478,14 +494,34 @@ function accept(args) {
       if (!V.matchTask(line)) throw new UserError('A private task is too long to file. Shorten it. Nothing was filed.');
       return line;
     };
-    const followupLines = rows.map((r) => (r.task || (r.hiddenTask ? privateTask(r.hiddenTask) : `- ${r.note}`)));
+    // The same rule for a mention the grammar cannot read: its own page's name if there is one, else @me.
+    const privateLoose = (m) => {
+      const slug = V.plainSlug(m.name);
+      if (SLUG_RE.test(slug) && (me.has(slug) || peopleKnown.has(slug) || names.includes(slug))) {
+        if (!m.text) m.text = m.name;
+        return privateForm({ ...m, person: slug });
+      }
+      filedAsOwn += 1;
+      const lead = m.owner === 'theirs' ? `Waiting on ${m.name}, who owes this` : `Follow up with ${m.name}`;
+      const line = privateForm({ ...m, person: 'me', owner: 'mine', text: m.text ? `${lead}: ${m.text}` : lead });
+      if (!V.matchTask(line)) throw new UserError('A private task is too long to file. Shorten it. Nothing was filed.');
+      return line;
+    };
+    const followupLines = rows.map((r) => {
+      if (r.task) return r.task;
+      if (r.hiddenTask) return privateTask(r.hiddenTask);
+      return r.hiddenLoose ? privateLoose(r.hiddenLoose) : `- ${r.note}`;
+    });
     // A private section keeps its tasks as tasks, in the same section. Its other lines become plain text.
     const capable = V.taskCapableFlags(split.hidden);
     let plainTasks = 0;
     const privateLines = split.hidden.flatMap((line, i) => {
+      if (split.headings.has(i)) return []; // the page writes its own heading
       const bare = untaggedTask(line);
       if (bare && capable[i]) return [privateTask(bare)];
       if (bare) plainTasks += 1;
+      const loose = bare || !capable[i] ? null : looseMention(line);
+      if (loose) return [privateLoose(loose)];
       return clean(line) ? [`- ${clean(line)}`] : [];
     });
     const hiddenTasks = [...followupLines, ...privateLines].filter((l) => !isPublic(l) && V.parseTask(l, me));

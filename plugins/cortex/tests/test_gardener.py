@@ -439,8 +439,8 @@ def test_clean_title_removes_poison(text):
 
 
 def test_clean_title_keeps_ordinary_requests():
-    for t in ("Fix the token limit bug", "Review /Users/me/projects/some-long-folder-name-without-digits-at-all/file.md",
-              "What does the password policy say?"):
+    for t in ("Fix the layout bug", "Review /Users/me/projects/some-long-folder-name-without-digits-at-all/file.md",
+              "What does the holiday policy say?"):
         assert G.clean_title(t)[:12] == t[:12]
     assert G.clean_title("") == "(no title)"
     assert G.clean_title("<>") == "(no title)"
@@ -453,7 +453,7 @@ def test_poisoned_title_end_to_end(env):
     out = run(env, "gardener").stdout
     assert "sk-ant" not in out and "</cortex_notes>" not in out
     row = [l for l in out.splitlines() if "poison" in l]
-    assert len(row) == 1 and "Hi" in row[0]
+    assert len(row) == 1 and G.HIDDEN_TITLE in row[0]
 
 
 def test_no_transcript_text_anywhere_but_the_title(env):
@@ -1069,7 +1069,7 @@ def test_gardener_keeps_to_plain_hyphens_and_standard_library():
     assert "—" not in text and "–" not in text
     imports = set(re.findall(r"^(?:from|import) ([a-z_]+)", text, re.M))
     assert imports <= {"__future__", "collections", "datetime", "fcntl", "json", "os", "re", "stat", "subprocess", "sys", "time",
-                       "pathlib", "xml", "cortex"}
+                       "pathlib", "xml", "cortex", "hashlib", "unicodedata"}
 
 
 # ---------------------------------------------------------------- the breaker's findings
@@ -1112,6 +1112,70 @@ def elsewhere_file(env, title="Tune the build", **kw):
     return claude_file(env, msgs=(title, "two", "three"), cwd=str(env["home"] / "projects" / "client-work"), **kw)
 
 
+def a_week_on(env):
+    """As if the card last spoke of sessions elsewhere 8 days ago."""
+    path = env["home"] / ".cortex" / "gardener" / "state.json"
+    state = json.loads(path.read_text())
+    state["elsewhere_shown"] = {k: time.time() - 8 * DAY for k in state["elsewhere_shown"]}
+    path.write_text(json.dumps(state))
+
+
+def test_the_card_says_sessions_elsewhere_once_a_week_and_records_it(env):
+    elsewhere_file(env)
+    report(env)
+    assert "not checked" in card_text(hook(env))
+    assert "not checked" not in card_text(hook(env))
+    first = json.loads((env["home"] / ".cortex" / "gardener" / "state.json").read_text())["elsewhere_shown"]
+    assert list(first) == [os.path.realpath(env["vault"])]
+    a_week_on(env)
+    assert "not checked" in card_text(hook(env))
+
+
+def test_the_weekly_limit_does_not_quieten_sessions_never_logged(env):
+    elsewhere_file(env)
+    claude_file(env)
+    report(env)
+    assert "1 elsewhere" in card_text(hook(env))
+    second = card_text(hook(env))
+    assert "1 session this week was never logged - say 'catch up'." in second and "elsewhere" not in second
+
+
+def test_a_dismissal_keeps_the_record_of_the_weekly_line(env):
+    gone, _ = elsewhere_file(env)
+    elsewhere_file(env)
+    report(env)
+    card_text(hook(env))
+    run(env, "gardener", "--dismiss", gone)
+    state = json.loads((env["home"] / ".cortex" / "gardener" / "state.json").read_text())
+    assert state["elsewhere_shown"] and gone in state["dismissed"]
+    assert "not checked" not in card_text(hook(env))
+
+
+def test_gardener_elsewhere_off_stops_every_mention(env):
+    sid, _ = elsewhere_file(env)
+    missed, _ = claude_file(env)
+    report(env)
+    (env["vault"] / "kit.yaml").write_text("gardener_elsewhere: off\n")
+    assert "not checked" not in card_text(hook(env))     # at once, before the next count
+    rep = report(env, "--days", "30")
+    assert rep["elsewhere"] == [] and rep["other_folders"] == 0 and rep["elsewhere_week"] == 0
+    assert missed_ids(rep) == {missed}
+    assert "not checked" not in run(env, "gardener").stdout.lower()
+    box = board(env).inbox([])
+    assert "elsewhere" not in box["missed_note"]
+    assert "not checked" not in card_text(hook(env))
+
+
+def test_the_card_and_the_board_count_sessions_elsewhere_over_the_same_days(env):
+    elsewhere_file(env)
+    elsewhere_file(env)
+    elsewhere_file(env, age=10 * DAY)
+    report(env)
+    assert "2 sessions elsewhere this week" in card_text(hook(env))
+    box = board(env).inbox([])
+    assert box["missed_note"].startswith("2 sessions elsewhere were not checked")
+
+
 def test_sessions_elsewhere_are_said_on_the_card_with_one_line(env):
     for _ in range(3):
         elsewhere_file(env)
@@ -1120,6 +1184,7 @@ def test_sessions_elsewhere_are_said_on_the_card_with_one_line(env):
     assert "3 sessions elsewhere this week were not checked - say 'catch up' to see them." in text
     claude_file(env)
     report(env)
+    a_week_on(env)
     lines = [l for l in card_text(hook(env)).splitlines() if "not checked" in l or "never logged" in l]
     assert lines == ["1 session this week was never logged, 3 elsewhere were not checked - say 'catch up'."]
 
@@ -1152,6 +1217,7 @@ def test_a_session_elsewhere_can_be_dismissed_and_logged(env):
     report(env)
     run(env, "gardener", "--dismiss", gone)
     assert "1 session elsewhere" in card_text(hook(env))
+    a_week_on(env)
     rep = report(env)
     assert [r["id"] for r in rep["elsewhere"]] == [logged] and rep["dismissed"] == 1
     d = env["home"] / ".cortex" / "sessions" / logged
@@ -1209,9 +1275,26 @@ def test_clean_title_cannot_carry_a_command():
 
 
 def test_clean_title_still_keeps_ordinary_words():
-    for t in ("Fix the cookie banner on the home page", "Why does the Authorization header fail",
-              "Author: notes for the launch", "Compass: north is up", "Pass the build on main"):
+    for t in ("Fix the banner on the home page", "Why does the header fail", "Author: notes for the launch",
+              "Compass: north is up", "Bypass the build on main", "A monkey and a spinning top", "Write the - plan"):
         assert G.clean_title(t) == t
+
+
+@pytest.mark.parametrize("text", [
+    "the db password for prod is hunter2", "pass is hunter2", "pw: hunter2", "mysql -phunter2 now", "mysql -p hunter2",
+    "passcode: 991122", "https://x.test/a?key=abc123", "my PIN 1234", "the secret word", "a token", "use my API key",
+    "api_key here", "the credentials file", "auth for prod", "OAuth flow", "set a cookie", "Bearer abc", "my private key",
+    "mail jane@example.com", "id deadbeefdeadbeef", "blob QWxhZGRpbjpvcGVuIHNlc2FtZQ==", "NoDigitsButMixedCaseLettersForAKey",
+    "pass the deck to Sam", "DB_PASS=x", "PGPASS=x", "dbPass x", "pass\u200bword x", "to\u200bken x",
+    "<secret>x</secret>", "$(cat password)", "\uff50\uff41\uff53\uff53 is x",
+    "x" * 100 + " and then the password", "x " * 900 + "the password is hunter2",
+])
+def test_a_title_with_a_secret_word_or_shape_is_hidden_whole(text):
+    assert G.clean_title(text) == G.HIDDEN_TITLE
+
+
+def test_a_folder_is_not_hidden_for_a_word_in_its_name():
+    assert G.clean_title("/work/token-service", 60, is_path=True) == "/work/token-service"
 
 
 def test_a_long_folder_stays_readable_and_a_folder_is_still_cleaned():
@@ -1388,31 +1471,73 @@ def test_a_fork_of_a_logged_session_is_covered_until_much_more_follows(env):
     logged_flag(env, first, 0)
     assert report(env)["missed"] == []
     many, _ = copy_of(env, path, extra=G.CONTINUED_MESSAGES)
-    # These messages are stamped before the flag: still covered. Move the flag back and they are after it.
-    logged_flag(env, first, 400)
+    rep = report(env)      # no longer a copy, whenever the flag was set
+    assert missed_ids(rep) == {many} and not rep["missed"][0]["continued"] and rep["skipped"]["fork_copies"] == 1
+
+
+def test_a_long_fork_of_a_logged_parent_is_real_work(env):
+    parent, path = claude_file(env)
+    fork, _ = copy_of(env, path, extra=30)
+    logged_flag(env, parent, 0)
     rep = report(env)
-    assert missed_ids(rep) == {many} and rep["missed"][0]["continued"]
+    assert missed_ids(rep) == {fork} and rep["skipped"]["fork_copies"] == 0 and rep["missed"][0]["also"] == []
 
 
-def test_a_dismissed_fork_stays_dismissed(env):
+def test_dismissing_a_parent_does_not_hide_its_long_fork(env):
+    parent, path = claude_file(env)
+    fork, _ = copy_of(env, path, extra=30)
+    run(env, "gardener", "--dismiss", parent)
+    rep = report(env)
+    assert missed_ids(rep) == {fork} and [r["id"] for r in rep["dismissed_rows"]] == [parent]
+
+
+def test_a_fork_that_changes_direction_at_the_same_length_is_its_own_row(env):
+    long_msgs = tuple(f"shared {i}" for i in range(3))
+    parent, path = claude_file(env, msgs=long_msgs + tuple(f"parent {i}" for i in range(30)))
+    shared = [json.loads(l) for l in path.read_text().splitlines()][:6]
+    fork = str(uuid.uuid4())
+    write_jsonl(path.parent / f"{fork}.jsonl", shared + [user(f"fork {i}", str(env["vault"])) for i in range(30)])
+    rep = report(env)
+    assert missed_ids(rep) == {parent, fork} and rep["skipped"]["fork_copies"] == 0
+
+
+def test_copies_do_not_chain_past_the_limit(env):
     first, path = claude_file(env)
-    copy_of(env, path)
+    second, second_path = copy_of(env, path, extra=2)
+    third, _ = copy_of(env, second_path, extra=2)
+    rep = report(env)
+    assert missed_ids(rep) == {third, first} and rep["skipped"]["fork_copies"] == 1
+
+
+def test_a_dismissal_is_for_one_session_id_only(env):
+    first, path = claude_file(env)
+    fork, _ = copy_of(env, path)
     run(env, "gardener", "--dismiss", first)
     rep = report(env)
-    assert rep["missed"] == [] and rep["dismissed"] == 1
+    assert missed_ids(rep) == {fork} and rep["dismissed"] == 1 and rep["missed"][0]["also"] == []
+    run(env, "gardener", "--dismiss", fork)
+    rep = report(env)
+    assert rep["missed"] == [] and rep["dismissed"] == 2
 
 
 def test_a_fork_named_in_the_file_is_collapsed(env):
     first, _ = claude_file(env)
-    fork, path = claude_file(env, msgs=("another start", "two", "three"))
+    fork, path = claude_file(env)      # the same words at another moment, but the file says it is a fork
     rewrite(path, forkedFrom={"sessionId": first, "messageUuid": "u"})
-    assert missed_ids(report(env)) == {fork}
+    assert len(missed_ids(report(env))) == 1
     a, _ = codex_file(env)
-    b, path = codex_file(env, msgs=("codex other", "two", "three"))
+    b, path = codex_file(env)
     lines = [json.loads(l) for l in path.read_text().splitlines()]
     lines[0]["payload"]["forked_from_id"] = a
     write_jsonl(path, lines)
-    assert missed_ids(report(env)) == {fork, b}
+    assert len(missed_ids(report(env))) == 2
+
+
+def test_a_fork_named_in_the_file_with_other_words_is_listed(env):
+    first, _ = claude_file(env)
+    fork, path = claude_file(env, msgs=("another start", "two", "three"))
+    rewrite(path, forkedFrom={"sessionId": first, "messageUuid": "u"})
+    assert missed_ids(report(env)) == {first, fork}
 
 
 def test_same_words_at_another_moment_are_two_sessions(env):

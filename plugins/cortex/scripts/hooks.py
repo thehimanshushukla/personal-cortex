@@ -121,6 +121,15 @@ def gardener_summary(v: Path) -> dict:
     return entry if isinstance(entry, dict) else {}
 
 
+def elsewhere_due(v: Path) -> bool:
+    """Sessions elsewhere are said at most once a week. Asked only when there are some to say."""
+    try:
+        import gardener
+        return gardener.claim_elsewhere_line(v)
+    except Exception:  # the card goes on without this line
+        return False
+
+
 def gardener_line(v: Path) -> str:
     """The card's count of unlogged sessions. No transcript is opened here, so a huge folder cannot
     slow a session start: this reads one small file of numbers and ids, and a stale or missing one
@@ -142,6 +151,7 @@ def gardener_line(v: Path) -> str:
                                   and ((STATE_ROOT / s / "logged").exists() or (STATE_ROOT / s / "skipped").exists())))
     lines = []
     n, away = still_open(week, ids), still_open(info.get("elsewhere"), info.get("elsewhere_ids"))
+    away = away if away and elsewhere_due(v) else 0
     missed = f"{n} session{' this week was' if n == 1 else 's this week were'} never logged"
     if n and away:     # always one short line, whichever of the two there is
         lines.append(f"{missed}, {away} elsewhere {'was' if away == 1 else 'were'} not checked - say 'catch up'.")

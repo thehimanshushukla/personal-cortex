@@ -324,6 +324,7 @@ function withoutPrivateSections(body) {
   const reach = closerReach(lines);
   const out = [];
   const hidden = [];
+  const headings = new Set(); // which hidden lines are the "Private" headings themselves
   let level = 0;
   let fence = '';
   let raw = null;
@@ -350,6 +351,7 @@ function withoutPrivateSections(body) {
       level = level ? Math.min(level, opener.level) : opener.level;
       inItem = false;
       withheld += 1;
+      for (let k = 0; k < opener.lines; k += 1) headings.add(hidden.length + k);
       hidden.push(...lines.slice(i, i + opener.lines));
       i += opener.lines - 1;
       continue;
@@ -378,7 +380,7 @@ function withoutPrivateSections(body) {
     }
     hidden.push(line);
   }
-  return { text: out.join('\n'), hidden, withheld };
+  return { text: out.join('\n'), hidden, headings, withheld };
 }
 
 // Text with private parts removed. Sections first, because a tagged heading opens a section.

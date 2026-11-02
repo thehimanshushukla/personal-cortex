@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+Built but not released yet: the Gardener and the Chat tab extension.
+
 The Gardener, first part: it finds working sessions that never reached your cortex. No AI, and nothing is sent anywhere.
 - `cortex.py gardener` lists Claude Code and Codex sessions on this Mac that were never logged, with date, folder, message count and the first request as a short title. It prints no other chat text.
 - The start card says "3 sessions this week were never logged - say 'catch up'", and says nothing when there are none. The count runs in the background, so a session start never waits for it.
@@ -9,11 +11,17 @@ The Gardener, first part: it finds working sessions that never reached your cort
 - A warning when an unlogged session is over 21 days old, because Claude Code deletes transcripts after 30 days by default.
 - `cortex.py gardener --journal` writes a weekly page, `_cortex/journal/<year>-W<week>.md`, with counts and the titles of logged pages only.
 - Session pages can carry `chat_id:`, so a page knows which chat it came from.
-- Sessions in other folders that were not checked are counted on the start card and the board, and catch-up offers them.
+- Sessions in other folders that were not checked are counted on the start card at most once a week and on the board, and catch-up offers them. `gardener_elsewhere: off` in `kit.yaml` stops that.
+- A title with anything secret-looking in it shows as "(title hidden)". A best effort that errs towards hiding, not a guarantee.
+- A fork is listed by itself unless it is an exact copy, and a dismissal covers one session only.
 - `cortex.py new --date` now sets `created` to that date, so a caught-up session counts in the week it started.
 - `gardener_scope` in `kit.yaml`: `cortex` (default: your cortex folder, and sessions that mention or touched it), `all`, or `off`.
 - A plain Claude Chat cannot be seen, because it is not on your Mac. Use "save this chat" there.
 - Nothing runs on a timer. `cortex.py install-gardener --yes` adds a weekly run, only if you ask for it.
+
+Cortex in the Chat tab: a separate small extension for the Claude desktop app, in `connector/` in the kit's repository. It waits on checks in the real app.
+- It shows your card, searches and opens your pages, adds to-dos, saves a chat to `inbox/` as a proposal, and files a saved chat when you accept it.
+- Desktop app only. Private parts of a page stay out of every chat tool. See `connector/README.md`.
 
 ## 0.4.1
 "Update my cortex" now offers to update the plugin for you. The Update button in the app's Plugins screen did not fetch a new version in testing.
