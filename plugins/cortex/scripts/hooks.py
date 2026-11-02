@@ -64,7 +64,7 @@ def sync_engine() -> None:
     if stamp.exists() and stamp.read_text() == marker:
         return
     ENGINE.mkdir(parents=True, exist_ok=True)
-    for sub in ("scripts", "templates", "docs"):
+    for sub in ("scripts", "templates", "docs", ".claude-plugin"):   # the upgrade skill reads the version from .claude-plugin
         if (root / sub).is_dir():
             shutil.copytree(root / sub, ENGINE / sub, dirs_exist_ok=True)
     stamp.write_text(marker)

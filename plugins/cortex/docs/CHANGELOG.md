@@ -13,6 +13,8 @@ The board and inbox: say "show my board".
 - The start card says "say 'show my board' to open them" next to overdue items.
 - The board has three looks, Paper, Blue and Night, and follows your Mac unless you pick one. Your choice is remembered. The font ships with the kit, so the page still calls nothing outside your Mac.
 - A closed board says so plainly, and Refresh no longer says "Up to date" when it has closed.
+- "Update my cortex" reads the installed version correctly and gives the Code tab steps (it used to look for a file the engine copy did not have).
+- Ask Claude names your cortex folder in its question, because the Claude app can start a linked chat in a temporary folder.
 
 ## 0.3.1
 Fixes from the first weeks of real use:

@@ -374,7 +374,7 @@ def test_prompt_length_bound():
     assert len(B.encoded_link(p, vault)) <= B.URL_LIMIT and p.endswith(B.TASK_ASK) and "(from Title, a/b.md;" in p
     t["raw"] = "short line"
     assert B.task_prompt(t, "Title", "a/b.md", vault) == (
-        'About this item in my cortex: "short line" (from Title, a/b.md; due no date; mine @me).\n' + B.TASK_ASK)
+        'About this item in my cortex: "short line" (from Title, a/b.md; due no date; mine @me).\n' + B.where(vault) + B.TASK_ASK)
     ip = B.inbox_prompt("inbox/" + "%" * 20000 + ".md", "T", vault)
     assert ip.endswith(B.INBOX_ASK) and len(B.encoded_link(ip, vault)) <= B.URL_LIMIT
     for text in ("%" * 20000, "a" * 20000, "\u2764\ufe0f&#\n" * 3000, "ok"):
@@ -728,3 +728,19 @@ def test_theme_bad_file_falls_back_and_font_is_served_with_the_key_only(env, srv
     with urllib.request.urlopen(req, timeout=10) as r:
         assert r.status == 200 and r.read(4) == b"wOF2"
     assert call(srv, "GET", "/geist.woff2", token=False)[0] == 403
+
+
+def test_ask_claude_prompt_names_the_folder():
+    vault = Path("/Users/alex/my cortex")
+    t = {"raw": "- [ ] @me call", "due": "", "owner": "mine", "person": "me"}
+    for p in (B.task_prompt(t, "Title", "a/b.md", vault), B.inbox_prompt("inbox/n.md", "N", vault),
+              B.task_prompt(dict(t, raw="%" * 20000), "T%" * 5000, "x/%" * 3000, vault)):
+        assert "My cortex is the folder /Users/alex/my cortex" in p
+
+
+def test_engine_copy_has_the_version_file(tmp_path, monkeypatch):
+    import hooks as H
+    monkeypatch.setattr(H, "ENGINE", tmp_path / "engine")
+    H.sync_engine()
+    assert json.loads((tmp_path / "engine/.claude-plugin/plugin.json").read_text())["version"]
+    assert (tmp_path / "engine/scripts/geist.woff2").exists()

@@ -38,7 +38,7 @@ Overdue is worked out from the date, so nothing can be dropped there. "Undo last
 
 ## Ask Claude from a card
 
-"Ask Claude" opens a new Claude Code chat with a question about that card already typed in. Claude asks to confirm the folder first, and nothing is sent until the person presses send. "Copy prompt" puts the same question on the clipboard for any other Claude window.
+"Ask Claude" opens a new Claude Code chat with a question about that card already typed in. Claude asks to confirm the folder first, and nothing is sent until the person presses send. "Copy prompt" puts the same question on the clipboard for any other Claude window. Sometimes the app starts that chat in a temporary folder even though the right one was confirmed; the question names the cortex folder, so Claude can still find the page.
 
 ## If something looks wrong
 
