@@ -15,7 +15,7 @@ Run `cortex sort-desk`. It prints the import proposals from `_cortex/sorting-des
 
 If there are loose notes, list them after the proposals. For each: if it is empty, offer to archive it (move it to `inbox/` with a header and `status: archived`, never delete); otherwise propose a home and a page type exactly as for imports, and give it a proper header with `cortex new` on the person's yes.
 
-A note in `inbox/` whose top lines include `source: chat` and `status: proposed` was saved from the Chat tab. List these by their `name:` line. Ask which area each belongs in. To file one, use the Cortex extension's `cortex_accept` tool if you have it. If not, make a session page with `cortex new`, copy the note's sections into it after a yes, and move the note to `sources/<yyyy-mm>/`. Never delete it. Lines marked `{private}` stay marked.
+A note in `inbox/` whose top lines include `source: chat` and `status: proposed` was saved from the Chat tab. List these by their `name:` line. Ask which area each belongs in. To file one, use the Cortex extension's `cortex_accept` tool if you have it. If not, make a session page with `cortex new`, copy the note's sections into it after a yes, and move the note to `sources/<yyyy-mm>/`. Never delete it. A follow-up line names a person with `@`, and the build stops if that person has no page. For a line without `{private}`, make the person's page with `cortex new`. For a line with `{private}`, make no page and rewrite the line as your own to-do, keeping it private: `- [ ] @me Waiting on <name>, who owes this: <what> {private}`, or `- [ ] @me Owed to <name>: <what> {private}`.
 
 If there are no proposals, no loose notes and nothing saved from chat, say so, and offer the import skill.
 

@@ -38,6 +38,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from xml.sax.saxutils import escape
 
 HOME = Path.home()
 CONFIG = Path(os.environ.get("CORTEX_CONFIG", HOME / ".cortex" / "config.json"))
@@ -252,6 +253,8 @@ def iter_pages(vault: Path):
         for f in sorted(files):
             if f.endswith(".md") and f not in NOT_PAGES_ANYWHERE and not (root == str(vault) and f in NOT_PAGES_AT_ROOT):
                 p = Path(root) / f
+                if p.is_fifo():       # opening one would wait forever
+                    continue
                 yield read_page(p, vault)
 
 
@@ -880,12 +883,20 @@ def cmd_backup(args) -> int:
     if not (vault / ".git").exists():
         print("This cortex folder is not a git repository yet - run setup or 'cortex doctor'.")
         return 1
-    git(vault, "add", "-A")
+    added = git(vault, "add", "-A")
+    if added.returncode != 0:
+        log_backup(vault, f"save FAILED: {added.stderr.strip()[:200]}")
+        print("Backup: could not save your changes:\n  " + added.stderr.strip()[:400])
+        return 1
     status = git(vault, "status", "--porcelain").stdout.strip()
     committed = False
     if status:
         r = git(vault, "commit", "-q", "-m", f"cortex backup {dt.datetime.now().strftime('%Y-%m-%d %H:%M')}")
-        committed = r.returncode == 0
+        if r.returncode != 0:
+            log_backup(vault, f"save FAILED: {(r.stderr or r.stdout).strip()[:200]}")
+            print("Backup: could not save your changes:\n  " + (r.stderr or r.stdout).strip()[:400])
+            return 1
+        committed = True
     has_remote = bool(git(vault, "remote").stdout.strip())
     if not has_remote:
         msg = "committed locally (no GitHub remote yet)" if committed else "nothing to back up (no GitHub remote yet)"
@@ -1003,13 +1014,17 @@ def cmd_install_backup(args) -> int:
     stable.write_text(Path(__file__).read_text())
     plist = HOME / "Library" / "LaunchAgents" / "com.cortex.backup.plist"
     plist.parent.mkdir(parents=True, exist_ok=True)
-    plist.write_text(PLIST.format(script=stable, vault=vault, home=HOME))
+    plist.write_text(PLIST.format(script=escape(str(stable)), vault=escape(str(vault)), home=escape(str(HOME))))
     if os.environ.get("CORTEX_NO_LAUNCHD"):
         print("Weekly backup file written (test mode: not switched on).")
         return 0
     uid = os.getuid()
-    subprocess.run(["launchctl", "bootout", f"gui/{uid}", str(plist)], capture_output=True)
-    r = subprocess.run(["launchctl", "bootstrap", f"gui/{uid}", str(plist)], capture_output=True, text=True)
+    try:
+        subprocess.run(["launchctl", "bootout", f"gui/{uid}", str(plist)], capture_output=True)
+        r = subprocess.run(["launchctl", "bootstrap", f"gui/{uid}", str(plist)], capture_output=True, text=True)
+    except OSError:
+        print("Weekly backup file written but not switched on: this computer has no launchctl (Mac only).")
+        return 1
     if r.returncode != 0:
         print(f"Weekly backup file written but could not be switched on: {r.stderr.strip()}")
         return 1
@@ -1024,7 +1039,10 @@ def cmd_doctor(args) -> int:
         nonlocal ok
         ok &= good
         print(f"{'OK ' if good else 'FIX'} {text}{'' if good or not fix else ' - ' + fix}")
-    clt = subprocess.run(["xcode-select", "-p"], capture_output=True).returncode == 0
+    try:
+        clt = subprocess.run(["xcode-select", "-p"], capture_output=True).returncode == 0
+    except OSError:
+        clt = False
     line(clt, "Apple Command Line Tools (git, python3)", "run: xcode-select --install")
     vault = config_vault(load_config())
     line(bool(vault), f"setup done ({CONFIG})", "that file does not name a full folder path - fix it" if CONFIG.exists() else "say 'set up my cortex'")

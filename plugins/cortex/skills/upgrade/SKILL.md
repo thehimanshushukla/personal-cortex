@@ -25,7 +25,7 @@ Explain and guide them, one step at a time:
 
 ## 3. Back up first
 
-Run `python3 ~/.cortex/engine/scripts/cortex.py backup` so the current state is saved before anything changes. If it fails, stop and say why; do not upgrade without a saved copy. The one exception is a cortex with no backup set up (it says "not a git repository"): tell the person, copy the whole folder to `<vault>-before-<Y>`, say where the copy is, and carry on. Skip every `git` command below, and tell them "say 'set up my cortex' to add backup".
+Run `python3 ~/.cortex/engine/scripts/cortex.py backup` so the current state is saved before anything changes. If it fails, stop and say why; do not upgrade without a saved copy. The one exception is a cortex with no backup set up (it says "not a git repository"): tell the person, run `cp -R "<vault>" "<vault>-before-<Y>"` with no trailing slash, say where the copy is, and carry on. If that copy already exists, use the one that is there and do not copy again. In section 6, skip steps 3 and 4 and the backup in step 5, and tell them "say 'set up my cortex' to add backup".
 
 ## 3b. One-time move to AGENTS.md (vaults set up before 0.3.0)
 

@@ -31,7 +31,7 @@ def env(tmp_path):
     (home / ".cortex").mkdir(parents=True)
     vault.mkdir()
     (home / ".cortex" / "config.json").write_text(json.dumps({"vault": str(vault), "kit_version": "0.1.0"}))
-    e = dict(os.environ, HOME=str(home), CORTEX_CONFIG=str(home / ".cortex" / "config.json"))
+    e = dict(os.environ, CORTEX_NO_LAUNCHD="1", HOME=str(home), CORTEX_CONFIG=str(home / ".cortex" / "config.json"))
     e.pop("CORTEX_HOOKS", None)
     subprocess.run(["git", "init", "-q", "-b", "main", str(vault)], check=True)
     subprocess.run(["git", "-C", str(vault), "config", "user.email", "t@example.com"], check=True)
@@ -649,6 +649,7 @@ def test_last_weekly_due_is_the_most_recent_sunday():
 
 
 def test_backup_plist_catches_up(env):
+    (env["home"] / ".cortex" / "bin").mkdir(parents=True, exist_ok=True)
     assert run(env, "install-backup").returncode == 0
     plist = (env["home"] / "Library" / "LaunchAgents" / "com.cortex.backup.plist").read_text()
     assert "RunAtLoad" in plist and "--if-due" in plist
@@ -711,3 +712,28 @@ def test_card_points_chat_notes_at_the_inbox_and_the_sort_skill_knows_them(env):
     assert "Say 'what is in my inbox'" in (env["vault"] / "_cortex" / "card.md").read_text()
     skill = (CORTEX.parent.parent / "skills" / "sort" / "SKILL.md").read_text()
     assert "source: chat" in skill and "what is in my inbox" in skill.split("---")[1]
+
+
+def test_failed_save_is_a_failed_backup(env, tmp_path):
+    """Another git process holding the lock must not read as 'already up to date'."""
+    seed(env)
+    v = str(env["vault"])
+    remote = tmp_path / "remote.git"
+    subprocess.run(["git", "init", "-q", "--bare", str(remote)], check=True)
+    subprocess.run(["git", "-C", v, "remote", "add", "origin", str(remote)], check=True)
+    assert run(env, "backup").returncode == 0
+    (env["vault"] / "a.md").write_text("changed")
+    lock = env["vault"] / ".git" / "index.lock"
+    lock.write_text("")
+    r = run(env, "backup", "--if-due", "--quiet")
+    assert r.returncode == 1 and "could not save" in r.stdout
+    assert not (env["home"] / ".cortex" / "backup-last-weekly").exists()
+    lock.unlink()
+    assert run(env, "backup", "--if-due", "--quiet").returncode == 0
+
+
+def test_a_pipe_named_like_a_page_does_not_hang_the_build(env):
+    seed(env)
+    os.mkfifo(env["vault"] / "pipe.md")
+    r = subprocess.run([sys.executable, str(CORTEX), "build"], capture_output=True, text=True, env=env["env"], timeout=30)
+    assert r.returncode == 0, r.stdout

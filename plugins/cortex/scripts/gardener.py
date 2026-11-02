@@ -1033,7 +1033,10 @@ def install_schedule(args) -> int:
     plist = home() / "Library" / "LaunchAgents" / "com.cortex.gardener.plist"
     if args.off:
         if not os.environ.get("CORTEX_NO_LAUNCHD"):
-            subprocess.run(["launchctl", "bootout", f"gui/{os.getuid()}", str(plist)], capture_output=True)
+            try:
+                subprocess.run(["launchctl", "bootout", f"gui/{os.getuid()}", str(plist)], capture_output=True)
+            except OSError:
+                pass      # no launchctl, so nothing is loaded
         plist.unlink(missing_ok=True)
         print("The weekly Gardener is off. The start card and 'catch up' still work.")
         return 0
@@ -1054,8 +1057,12 @@ def install_schedule(args) -> int:
         print("Weekly Gardener file written (test mode: not switched on).")
         return 0
     uid = os.getuid()
-    subprocess.run(["launchctl", "bootout", f"gui/{uid}", str(plist)], capture_output=True)
-    r = subprocess.run(["launchctl", "bootstrap", f"gui/{uid}", str(plist)], capture_output=True, text=True)
+    try:
+        subprocess.run(["launchctl", "bootout", f"gui/{uid}", str(plist)], capture_output=True)
+        r = subprocess.run(["launchctl", "bootstrap", f"gui/{uid}", str(plist)], capture_output=True, text=True)
+    except OSError:
+        print("Weekly Gardener file written but not switched on: this computer has no launchctl (Mac only).")
+        return 1
     if r.returncode != 0:
         print(f"Weekly Gardener file written but could not be switched on: {r.stderr.strip()}")
         return 1

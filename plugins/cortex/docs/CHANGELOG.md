@@ -27,7 +27,7 @@ Other changes:
 - The weekly backup catches up too, when your Mac was asleep or off on Sunday. "Update my cortex" switches this on if you have the weekly backup, and it may save and push right away.
 - A new session rebuilds the start card when pages have changed outside a session, such as a chat you filed.
 - A cortex with no backup set up can now be updated: it makes a copy of the folder first.
-- Very long lines no longer slow a build, and more private headings are recognised.
+- Very long lines no longer slow a build.
 
 ## 0.4.1
 "Update my cortex" now offers to update the plugin for you. The Update button in the app's Plugins screen did not fetch a new version in testing.

@@ -72,12 +72,12 @@ Say these in your own words. Exact phrases are not needed.
 - **Which sessions count:** those in your cortex folder, and those elsewhere that mention your cortex or touched it. Others are left out, and the start card and the board say how many, so someone running lots of unrelated sessions does not get a noisy list. To count every session, put `gardener_scope: all` in `kit.yaml`. To turn it off, `gardener_scope: off`. The card mentions the others at most once a week; to stop that, `gardener_elsewhere: off`.
 - **Where you see it:** the start card (a count), "catch up" (the list), and the board's Inbox tab (date, folder, title, Ask Claude, Dismiss). A session you dismiss stays dismissed; that covers only that one session, not a fork of it. Ask Claude opens with the question typed in; nothing is sent until you press send, and it asks for your yes before writing.
 - **Time limit:** Claude Code deletes transcripts after 30 days by default. You get a warning when an unlogged session is over 21 days old.
-- **No schedule yet:** nothing runs on a timer unless you ask for it. The count happens when you start a session.
+- **A weekly run is optional:** nothing runs on a timer unless you say yes. The count happens when you start a session. Claude offers the weekly run once, after a catch-up. It runs Sunday at 17:00, or when your Mac is back if it was asleep or off, and the Claude app can stay closed.
 
 ## 6. Backup
 
 - GitHub backup is a yes/no question at setup. If you said yes, every log saves and pushes to your private GitHub.
-- Every Sunday at 18:00 a weekly backup saves anything left over. If the Mac was asleep, it runs at your next session.
+- Every Sunday at 18:00 a weekly backup saves anything left over. If the Mac was asleep or off, it runs when the Mac is back.
 - If pages were written but never saved (for example work logged from a Claude chat, where the hooks do not run), the start card says how many and offers to back them up.
 - Your pages are plain files you own. They work without this plugin, and you can read them on GitHub from anywhere.
 

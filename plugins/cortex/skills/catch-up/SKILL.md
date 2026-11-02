@@ -53,7 +53,7 @@ For each pick, in date order:
 
 ## Weekly run
 
-There is no schedule unless the person says yes to one. The start card and "catch up" work without it. At the end of a catch-up, offer it once: "Want a weekly count and journal page? It runs Sunday at 17:00, or when your Mac is back if it was off. No AI, nothing sent anywhere, and the Claude app can stay closed." Only on their yes run `cortex install-gardener --yes`. To stop it, run `cortex install-gardener --off`.
+There is no schedule unless the person says yes to one. The start card and "catch up" work without it. At the end of a catch-up, unless `~/Library/LaunchAgents/com.cortex.gardener.plist` or `~/.cortex/gardener/schedule-offered` exists, create that second file and offer it once: "Want a weekly count and journal page? It runs Sunday at 17:00, or when your Mac is back if it was off. No AI, nothing sent anywhere, and the Claude app can stay closed." Only on their yes run `cortex install-gardener --yes`. To stop it, run `cortex install-gardener --off`.
 
 ## Weekly journal
 
