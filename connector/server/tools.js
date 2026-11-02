@@ -157,7 +157,7 @@ function cortexInbox() {
       const text = V.readText(path.join(vault, 'inbox', file));
       const proposal = V.parseProposal(V.publicText(text).text);
       if (proposal) {
-        const count = proposal.sections['Follow-ups'].length;
+        const count = proposal.sections['Follow-ups'].filter(V.isOpenFollowup).length;
         const saved = /^\d{4}-\d{2}-\d{2}$/.test(proposal.saved) ? proposal.saved : 'earlier';
         rows.push(`- ${id}: "${clipChars(proposal.name, SNIPPET_CHARS) || id}" - saved from chat ${saved}, ${count} to-do(s) and follow-up(s). Can be accepted here.`);
       } else {

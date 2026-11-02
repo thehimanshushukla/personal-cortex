@@ -1,7 +1,8 @@
 'use strict';
 // The start card, computed from the pages. Follows render_card in plugins/cortex/scripts/cortex.py.
 // The only differences are the hints that name things chat cannot do, listed in the tests' golden
-// comparison, the "and N more" lines, the line naming the folder, and a line counting pages it had to skip.
+// comparison, the "and N more" lines, the line naming the folder, a line counting pages it had to skip,
+// and a line counting task lines it hid as private, which cortex.py counts.
 const path = require('path');
 const V = require('./vault');
 
@@ -101,6 +102,8 @@ function render(read, vault, limits) {
   }
   const overdue = all.filter((i) => i.due && i.due < now).length;
   if (overdue) lines.push(`${overdue} overdue.`, '');
+  const hiddenItems = pages.reduce((n, p) => n + p.hiddenTasks, 0);
+  if (hiddenItems) lines.push(`${hiddenItems} private item${hiddenItems === 1 ? '' : 's'} not shown.`, '');
   const inbox = V.inboxFiles(vault);
   if (inbox.length) {
     const fromChat = inbox.filter((f) => {
@@ -110,6 +113,11 @@ function render(read, vault, limits) {
   }
   const looseOutside = loose.filter((p) => !p.rel.startsWith('inbox/'));
   if (looseOutside.length) lines.push(`Loose notes: ${looseOutside.length} with no header.`, '');
+  const long = V.overlongTasks(pages);
+  if (long.count) {
+    const extra = long.rels.length > 3 ? ` and ${long.rels.length - 3} more` : '';
+    lines.push(wide(`Not counted: ${long.count} task line${long.count === 1 ? '' : 's'} over 4,000 characters, on ${long.rels.slice(0, 3).join(', ')}${extra}.`), '');
+  }
   const lb = lastBackup(vault);
   if (lb && /^\d{4}-\d{2}-\d{2}$/.test(lb)) lines.push(`Last backup: ${lb}${daysBetween(lb, now) > 7 ? ' - more than a week ago' : ''}.`);
   else lines.push('Last backup: none yet.');

@@ -7,17 +7,17 @@ const fs = require('fs');
 const path = require('path');
 const V = require('./vault');
 
-const { UserError, get } = V;
+const { UserError, get, SLUG_RE } = V;
 const MAX_PROPOSAL_BYTES = 20 * 1024;
 const MAX_WRITES_PER_HOUR = 20;
 const TODO_FILE = 'chat-todos';
-const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const RESERVED_AREAS = new Set(['people', 'organisations', 'sources', 'inbox', 'node-modules', 'cortex']);
 const IGNORABLE_IN_EMPTY_FOLDER = new Set(['.DS_Store', '.localized', 'Thumbs.db', 'desktop.ini']);
 const BACKUP_NOTE = 'Backup is not set up: these pages exist only on this computer. To add backup, open the Code tab of the Claude desktop app, install the Cortex plugin and say "set up my cortex". It finds this folder and only offers to set up the backup, which needs a free GitHub account.';
 const LOCK_NAME = '.chat-write.lock.tmp'; // *.tmp is in the cortex's .gitignore
 const LOCK_WAIT_MS = 3000;
 const LOCK_STALE_MS = 30000;
+const LOCK_FUTURE_MS = 2000; // a lock dated further ahead than clocks can differ here has a wrong time, so it can never age
 
 // ---------------------------------------------------------------- rate limit
 
@@ -147,7 +147,7 @@ function whyWriteFailed(e) {
 }
 
 // Only one server at a time may change the inbox: the app can run two, and a to-do added while its
-// file is being filed would otherwise be lost. A lock left by a crash goes stale.
+// file is being filed would otherwise be lost. A lock left by a crash goes stale, and so does one dated in the future.
 function withInboxLock(dir, work) {
   const lock = path.join(dir, LOCK_NAME);
   const giveUp = Date.now() + LOCK_WAIT_MS;
@@ -159,7 +159,8 @@ function withInboxLock(dir, work) {
       if (e.code !== 'EEXIST') throw e;
     }
     try {
-      if (Date.now() - fs.statSync(lock).mtimeMs > LOCK_STALE_MS) {
+      const age = Date.now() - fs.statSync(lock).mtimeMs;
+      if (age > LOCK_STALE_MS || age < -LOCK_FUTURE_MS) {
         fs.unlinkSync(lock);
         continue;
       }
@@ -249,12 +250,14 @@ function createUnique(vault, relDir, stem, render, taken = () => false, undo = [
   throw new UserError('Could not find a free file name. Nothing was saved.');
 }
 
-function checkSize(content) {
+function checkSize(content, what = 'That', fix = 'Shorten it.') {
   const size = typeof content === 'number' ? content : Buffer.byteLength(content);
   if (size > MAX_PROPOSAL_BYTES) {
-    throw new UserError(`That is too large to save (${Math.ceil(size / 1024)} KB; the most is ${MAX_PROPOSAL_BYTES / 1024} KB). Nothing was saved. Shorten it.`);
+    throw new UserError(`${what} is too large to save (${Math.ceil(size / 1024)} KB; the most is ${MAX_PROPOSAL_BYTES / 1024} KB). Nothing was saved. ${fix}`);
   }
 }
+
+const TODOS_FULL = ['Your to-do list in the inbox', `File it first: say "accept ${TODO_FILE}" with an area. The next to-do then starts a new list.`];
 
 function proposalTop(name) {
   return ['source: chat', 'status: proposed', `name: ${name}`, `saved: ${V.localDate()}`, '', V.PROPOSAL_NOTE, ''];
@@ -278,12 +281,12 @@ function todoAdd(args) {
     }
     if (st) {
       if (!st.isFile()) throw new UserError('inbox/chat-todos.md is not a plain file, so nothing was added.');
-      if (st.size > MAX_PROPOSAL_BYTES) checkSize(st.size); // decided before reading a file that may be huge
+      if (st.size > MAX_PROPOSAL_BYTES) checkSize(st.size, ...TODOS_FULL); // decided before reading a file that may be huge
       const old = V.readText(file);
       const lastSection = old.split('\n').filter((l) => l.startsWith('## ')).pop();
       if (lastSection !== '## Follow-ups') added = `\n## Follow-ups\n\n${added}`; // edited by hand: stay out of its other sections
       if (old && !old.endsWith('\n')) added = `\n${added}`; // never glue two lines together
-      checkSize(`${old}${added}`);
+      checkSize(`${old}${added}`, ...TODOS_FULL);
     } else {
       writeNew(file, [...proposalTop('To-dos added from chat'), '## Follow-ups', ''].join('\n'));
       undo.push([`inbox/${TODO_FILE}.md`, () => fs.unlinkSync(file)]);
@@ -414,7 +417,9 @@ function accept(args) {
       if (task && SLUG_RE.test(task.person)) tasks.push(line);
       else if (clean(line)) otherFollowups.push(clean(line));
     }
-    const names = [...new Set(tasks.map((l) => V.parseTask(l, me).person))].filter((p) => !me.has(p));
+    // A task tagged {private} is hidden: it never makes a people page and is never named in a reply.
+    const isPublic = (l) => !V.PRIVATE_TAG.test(l);
+    const names = [...new Set(tasks.filter(isPublic).map((l) => V.parseTask(l, me).person))].filter((p) => !me.has(p));
     const peopleKnown = new Set(read.pages.filter((p) => p.rel.startsWith('people/')).map((p) => path.basename(p.rel, '.md')));
     for (const name of names) {
       if (read.loose.some((p) => p.rel === `people/${name}.md`)) {
@@ -425,9 +430,17 @@ function accept(args) {
       }
     }
     const newPeople = names.filter((n) => !peopleKnown.has(n));
+    // The build stops on a task line naming someone with no page. So a hidden task like that stays on the
+    // page as a plain private line, which the build and the board do not count, until that person has a page.
+    const canCount = (l) => {
+      const who = V.parseTask(l, me).person;
+      return isPublic(l) || me.has(who) || peopleKnown.has(who) || names.includes(who);
+    };
+    const kept = tasks.filter(canCount);
+    const asNotes = tasks.filter((l) => !canCount(l)).map(clean);
+    const hiddenCount = tasks.length - tasks.filter(isPublic).length;
 
     // A private title or summary line must not reach the page header. The line itself stays in the body, still tagged.
-    const isPublic = (l) => !V.PRIVATE_TAG.test(l);
     const title = (isPublic(proposal.name) && clean(proposal.name)) || id;
     const summaryLines = sections.Summary.map(clean).filter(Boolean);
     const pageSummary = summaryLines.filter(isPublic).join(' ').slice(0, 200).trim() || `${title}, saved from a chat.`;
@@ -437,7 +450,7 @@ function accept(args) {
     if (bullets(proposal.before).length) body.push('## Notes', '', ...bullets(proposal.before), '');
     body.push('## What happened', '', ...(summaryLines.length ? summaryLines : [`${title}, saved from a chat.`]), '');
     if (bullets(sections.Decisions).length) body.push('## Decisions', '', ...bullets(sections.Decisions), '');
-    if (tasks.length || otherFollowups.length) body.push('## Follow-ups', '', ...tasks, ...otherFollowups.map((l) => `- ${l}`), '');
+    if (tasks.length || otherFollowups.length) body.push('## Follow-ups', '', ...kept, ...[...asNotes, ...otherFollowups].map((l) => `- ${l}`), '');
     if (bullets(sections['Open questions']).length) body.push('## Open / next', '', ...bullets(sections['Open questions']), '');
     // Other sections carry across as plain text: their lines cannot become tasks or end a section.
     for (const other of proposal.others) body.push(`## ${clean(other.name) || 'Notes'}`, '', ...bullets(other.lines), '');
@@ -472,7 +485,10 @@ function accept(args) {
 
     recordWrite();
     const extras = newPeople.length ? ` New person page(s): ${newPeople.map((n) => `people/${n}.md`).join(', ')}.` : '';
-    return `Filed "${title}" as ${base}/${stem}.md (id ${idFor(stem)}). ${tasks.length} follow-up(s) now count on your card and board.${extras} The saved proposal moved to ${sourceRel}.`;
+    const counted = tasks.filter(isPublic).filter(V.isOpenFollowup).length;
+    const privateNote = hiddenCount ? ` ${hiddenCount} private item(s) stay on the page and are not named here.` : '';
+    const notCounted = asNotes.length ? ` ${asNotes.length} of them name(s) someone with no page, so those lines are plain private notes and do not count as follow-ups until that person has a page.` : '';
+    return `Filed "${title}" as ${base}/${stem}.md (id ${idFor(stem)}). ${counted} follow-up(s) now count on your card and board.${privateNote}${notCounted}${extras} The saved proposal moved to ${sourceRel}.`;
   }));
 }
 

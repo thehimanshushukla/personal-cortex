@@ -59,7 +59,7 @@ Optional: upload `cortex-chat-skill.zip` as a skill, so phrases like "save this 
 |---|---|
 | Claude desktop app, Chat tab | Works |
 | Claude on the web or on your phone | Does not work. The extension runs on your computer. |
-| A chat inside the Project | Reads your card first: 20 of 20 test chats. Tested on one account and one model, so read this as "usually", not "always". |
+| A chat inside the Project | Reads your card first: 20 of 20 test chats, on one account and one model, so read this as "usually", not "always". The instruction wording has changed since that test, so the result must be measured again: step 8 of the [morning tests](MORNING-TESTS.md). |
 | A chat outside the Project | Should work when you ask for Cortex by name. Nothing tells it to read your card by itself. Step 11 of the morning tests checks this. |
 | Saving | Happens when you ask, or when Claude offers and you say yes. There is no save when a chat ends, so a chat you never saved is not in your Cortex. |
 | Old chats | This extension cannot read them. |
@@ -76,8 +76,19 @@ Optional: upload `cortex-chat-skill.zip` as a skill, so phrases like "save this 
 
 Two markings hide text from every chat tool: the card, search, opening a page and the inbox.
 
-- **A private section:** a heading such as `## Private`, down to the next `#` heading of the same or a higher level. `## **Private**`, `## _Private_`, `## Private {private}`, `## Notes {private}` and `Private` underlined with `---` all count. When in doubt it hides more, not less.
-- **A private line:** any line with `{private}` on it. In a page's header, the value shows as `(private)`.
+- **A private section** opens on a heading whose whole title is Private.
+  - Case, the emphasis marks `*`, `_`, `~` and backticks, a trailing `{private}`, closing hashes and trailing spaces do not matter, so `## private`, `## **Private**`, `## Private {private}` and `## Private ##` all open one. So does the same heading after a list or quote marker (`- ## Private`, `1. ## Private`, `> ## Private`), and `<h2>Private</h2>`.
+  - The line `Private`, spelled exactly so, opens one when it is underlined with `---` or `===` and starts its own paragraph.
+  - These do not open one: `## Private equity deals`, `## Notes {private}`, `##Private` or `#private` (no space), `Private school fees are due.` above `---`, a heading indented 4 or more spaces outside a list, and anything inside a code fence that closes.
+- **A private line:** any line with `{private}` on it, anywhere, is hidden on its own. It does not hide the lines after it. In a page's header, the value shows as `(private)`.
+
+**Where a section ends.** Only at an unindented `#` heading of the same or a higher level, outside code fences, `<pre>` blocks, other raw HTML blocks (`script`, `style`, `textarea`) and comments. An underlined or indented heading does not end it. A fence, block or comment left unclosed inside a section hides the rest of the page.
+
+**What is guaranteed.** Everything from an opening heading to the end described above is withheld from every chat tool, and so is every tagged line. A heading that does not meet the rule above hides nothing, so text under it stays visible.
+
+**The numbers.** `cortex.py` and the board do not hide anything, so they count private to-dos and follow-ups. When hidden items change a count, the chat card says so in one line, such as "1 private item not shown".
+
+**Filing.** A task tagged `{private}` never makes a people page and is never named in a reply. Its line stays on the filed page. If it names someone with no page yet, it stays as a plain private line that does not count as a follow-up, because the build stops on a task naming someone unknown.
 
 Be clear about the limits:
 
@@ -88,12 +99,12 @@ Be clear about the limits:
 ## How saving stays safe
 
 - Everything from chat lands in `inbox/` first. It does not count as fact until you file it.
-- Filing only ever makes new pages. A follow-up that names someone new also makes a short new page for that person.
+- Filing only ever makes new pages. A follow-up that names someone new also makes a short new page for that person, unless the follow-up is tagged `{private}`.
 - The saved note is moved to `sources/` after filing.
 - If a save, filing or setup fails part way, for example on a full disk, it undoes what it did and says so. If it could not undo something, it names the file. The automated tests check this with a limit on file size standing in for a full disk. A sudden power cut is not covered: it cannot leave a half-written page, but it can leave a finished extra file.
 - Two chats at once take turns. If one has to wait too long, it says nothing was saved and asks you to try again.
 - A note bigger than 2 MB is not read. The card counts it as skipped and the inbox says so.
-- The most it saves is 20 KB at a time and 20 writes an hour. The hourly count restarts when the app restarts.
+- The most it saves is 20 KB at a time and 20 writes an hour. When your to-do list in the inbox reaches 20 KB, Cortex asks you to file it, and the next to-do starts a new list. The hourly count restarts when the app restarts.
 - It cannot write anywhere you name and cannot run commands. It writes only inside your Cortex folder, apart from the one settings file above. It refuses to open anything outside your Cortex folder.
 - Text from your pages is handed to Claude marked as your notes and not as instructions. That lowers the risk of a page tricking Claude. It does not remove it, so read the prompt before you allow a save.
 

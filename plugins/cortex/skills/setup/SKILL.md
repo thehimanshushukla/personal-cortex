@@ -9,7 +9,7 @@ The person starts with an empty cortex. You interview them level by level, expla
 
 ## If a cortex already exists (for example one made from the Chat tab)
 
-Check this first. Read `~/.cortex/config.json`. If it names a folder that has a `kit.yaml` in it, do not interview and do not build anything again. Never overwrite that folder or that file.
+Check this first. Read `~/.cortex/config.json`. Read its `vault` value the way `cortex.py` does: spaces around it do not count, and `~` or `${HOME}` at the start means the home folder. If it names a folder that has a `kit.yaml` in it, do not interview and do not build anything again. Never overwrite that folder or that file.
 
 Say: "You already have a cortex at <folder>, so I will not set up a new one." Then run `python3 ~/.cortex/engine/scripts/cortex.py doctor` and:
 
@@ -20,7 +20,13 @@ Say: "You already have a cortex at <folder>, so I will not set up a new one." Th
 
 If `config.json` names a folder that is not there, say so and ask whether to reconnect it or start again. Do not change the file without a yes.
 
-Only when there is no cortex, go on to the interview below.
+If `config.json` exists but cannot be used (it is not valid JSON, it is not an object, or it has no `vault` holding a full folder path), do not interview. Show the person the file's exact contents and its path, say it does not name a folder, and ask which they want: fix it to name their folder, or start again. Starting again means moving it aside to `config.json.old` first, on a yes, so nothing is lost.
+
+If `config.json` names a folder that exists but has no `kit.yaml`, do not interview. Show the folder's path and what is in it, with `ls -A`. Say a cortex made from the Chat tab or an older setup may look like this. Ask which they want: repair it there (build around what is there, removing nothing), point `config.json` at another folder, or start again in a new empty folder. Do not change the folder or the file without a yes.
+
+If there is no `config.json` but `~/cortex` has files in it, do not start the interview either. Show what is in it and ask whether it is their cortex. If it has a `kit.yaml`, offer to write `config.json` pointing at it, and then treat it as an existing cortex, as above.
+
+Never replace an existing `config.json` or folder silently. Only when all of these checks find nothing, go on to the interview below.
 
 ## Open with why this exists (say this first, before any question)
 
@@ -90,6 +96,8 @@ Ask: "Where should your cortex live on this Mac?"
 1. `~/cortex` (recommended)
 2. Somewhere else - tell me
 
+If the folder they name already has files in it, show what is there and ask before going on. Never build over it.
+
 If the path is inside iCloud Drive, Desktop/Documents with iCloud sync on, OneDrive, Dropbox or Google Drive, warn: "Sync folders damage the backup history. Please pick a normal folder; your private GitHub copy is the backup." Re-ask.
 
 Ask: "Back it up to a private GitHub repository?" (recommended yes). Explain: "Every time you log, your pages are saved to a private copy on GitHub that only you can see. A weekly backup also runs every Sunday evening, in case anything was left behind."
@@ -119,7 +127,7 @@ Say: "Collection folders start empty. Each project or center gets its own folder
    - `kit.yaml` -> vault `kit.yaml`; fill in name (their full name, so their own to-dos are told apart from a colleague who shares a first name), areas, collections per area, vault path, github yes/no, `kit_version` (the `version` in `~/.cortex/engine/.claude-plugin/plugin.json`, never the template's placeholder), `teach: full`, `setup_date` (today, local `date +%F`).
    - `gitignore` -> vault `.gitignore`.
    - `area_index.md` -> `<area>/_index.md` for each area, filling id `area-<area>`, title, created/updated today, summary from what they said the area is for (ask one line if they did not say).
-4. **Pointer file:** write `~/.cortex/config.json` as `{"vault": "<absolute path>", "kit_version": "<version from kit.yaml>"}`.
+4. **Pointer file:** if `~/.cortex/config.json` does not exist, write it as `{"vault": "<absolute path>", "kit_version": "<version from kit.yaml>"}`. If it exists, stop: show its contents and ask. Change it only on a yes.
 5. **Git:** `git init` in the vault, set branch `main`, first commit of the files you created (by name, not `git add .`).
 6. **Private GitHub repo (if yes):**
    - If `gh auth status` succeeds: `gh repo create <repo> --private --source <vault> --remote origin --push`.

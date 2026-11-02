@@ -475,7 +475,7 @@ def test_symlink_out_is_refused_and_not_searched(env, server):
 def test_private_parts_are_withheld_everywhere(env, server):
     seed(env)
     body = ("\nPublic start.\n\n## Private\nSECRETWORD one\n```\n# a heading in code\nSECRETWORD two\n```\nSECRETWORD three\n"
-            "### Deeper\nSECRETWORD four\n\n## Next\nPublic middle.\nSECRETWORD line {private}\n\n# PRIVATE notes\nSECRETWORD five\n"
+            "### Deeper\nSECRETWORD four\n\n## Next\nPublic middle.\nSECRETWORD line {private}\n\n# PRIVATE\nSECRETWORD five\n"
             f"- [ ] @me SECRETWORD task (due {DAY}) {{mine}}\n# End\nPublic end.\n")
     make(env, "note", "--area", "acme", "--title", "Mixed page", body=body)
     page = server.ok("cortex_page", id="note-acme-mixed-page")
@@ -1116,9 +1116,8 @@ def test_a_very_large_inbox_file_is_skipped_and_counted(env, server):
 
 # Item 4: every way of writing a private heading
 @pytest.mark.parametrize("opening", [
-    "## Private {private}", "## **Private**", "## __Private__", "## _Private_", "## *Private*", "## `Private`", "## [Private]", "## Private:",
-    "## PRIVATE", "##Private", "## Notes {private}", "## { private } Notes", "Private\n---", "Private\n===", "**Private**\n-----", "Notes {private}\n---",
-    "<h2>Private</h2>", "> ## Private", "    ## Private", "## \uff30rivate",
+    "## Private {private}", "## **Private**", "## __Private__", "## _Private_", "## *Private*", "## `Private`", "## Private ##", "## Private   ",
+    "## PRIVATE", "Private\n---", "Private\n===", "<h2>Private</h2>", "> ## Private", "- ## Private", "1. ## Private", "## \uff30rivate",
 ])
 def test_private_heading_variants_hide_their_section_everywhere(env, server, opening):
     seed(env)
@@ -1434,3 +1433,189 @@ def test_build_packs_only_the_named_files(tmp_path):
 def test_the_skill_asks_for_a_real_name():
     skill = (CONNECTOR / "skill" / "cortex-chat" / "SKILL.md").read_text()
     assert "lowercase" not in skill and "like Alex Rivera" in skill
+
+
+# ---------------------------------------------------------------- second breaker round
+
+# Item 1: normal pages stay visible and the numbers agree
+OVER_HIDING = [
+    "## Private equity deals\n", "#private\n", "##Private\n", "## Notes {private}\n", "## Private:\n",
+    "Private school fees are due.\n---\n", "**Private**\n---\n", "Paragraph line\nPrivate\n---\n", "PRIVATE\n---\n",
+    "    ## Private\n", "```bash\n# private key\n```\n", "~~~\n## Private\nPrivate\n---\n~~~\n",
+]
+
+
+@pytest.mark.parametrize("opening", OVER_HIDING)
+def test_a_normal_page_is_not_taken_for_private_and_the_counts_agree(env, server, opening):
+    seed(env)
+    make(env, "note", "--area", "acme", "--title", "Plain", body=f"\n{opening}\nkept text\n- [ ] @me keep this {{mine}}\n")
+    page = server.ok("cortex_page", id="note-acme-plain")
+    assert "kept text" in page and "keep this" in page
+    build(env)
+    assert without_folder_line(unwrap(server.ok("cortex_card"))) == chat_wording(py(env, "card").stdout.strip())
+
+
+def test_card_says_when_hidden_items_change_a_count(env, server):
+    seed(env)
+    make(env, "note", "--area", "acme", "--title", "One", body="\n## Private\n- [ ] @me hidden one {mine}\n- [x] @me closed {mine}\n")
+    assert "1 private item not shown." in server.ok("cortex_card")
+    build(env)
+    assert "To-dos (3 open)" in py(env, "card").stdout and "To-dos (2 open)" in server.ok("cortex_card")
+    make(env, "note", "--area", "acme", "--title", "Two", body="\n- [ ] @me pay {private} {mine}\n")
+    assert "2 private items not shown." in server.ok("cortex_card")
+
+
+def test_an_unclosed_fence_shields_nothing_and_many_of_them_stay_fast(env, server):
+    seed(env)
+    make(env, "note", "--area", "acme", "--title", "Open", body="\n```\ncode\n\n## Private\nSECRETWORD\n")
+    assert "SECRETWORD" not in server.ok("cortex_page", id="note-acme-open")
+    make(env, "note", "--area", "acme", "--title", "Many", body="\n" + "```a\n" * 150000)
+    within(server, 10, "cortex_card")
+
+
+# Item 2: a tagged task on accept
+def test_a_tagged_task_naming_someone_unknown_is_never_named_or_given_a_page(env, server):
+    seed(env)
+    v = env["vault"]
+    (v / "inbox" / "chat-tagged.md").write_text(
+        f"source: chat\nstatus: proposed\nname: Tagged\nsaved: {DAY}\n\n## Summary\n\nS\n\n## Follow-ups\n\n"
+        "- [ ] @dr-secret-name pay {private} {theirs}\n- [ ] @sam-lee send it {theirs}\n")
+    assert "1 to-do(s)" in server.ok("cortex_inbox")
+    reply = server.ok("cortex_accept", id="chat-tagged", area="acme")
+    assert "dr-secret-name" not in reply
+    assert "1 follow-up(s) now count" in reply and "1 private item(s)" in reply and "no page" in reply
+    assert not (v / "people" / "dr-secret-name.md").exists() and (v / "people" / "sam-lee.md").exists()
+    filed = (v / "acme" / "sessions" / f"{DAY}-tagged.md").read_text()
+    assert "@dr-secret-name pay {private}" in filed
+    assert "Nothing found" in server.ok("cortex_search", query="dr-secret-name")
+    assert "Build OK" in build(env)
+    assert "Follow-ups (4 open)" in py(env, "card").stdout and "Follow-ups (4 open)" in server.ok("cortex_card")
+
+
+def test_a_tagged_task_naming_a_known_person_stays_a_task_and_the_card_says_so(env, server):
+    seed(env)
+    (env["vault"] / "inbox" / "chat-known.md").write_text(
+        f"source: chat\nstatus: proposed\nname: Known\nsaved: {DAY}\n\n## Summary\n\nS\n\n## Follow-ups\n\n- [ ] @alex-rivera pay {{private}} {{theirs}}\n")
+    reply = server.ok("cortex_accept", id="chat-known", area="acme")
+    assert "0 follow-up(s) now count" in reply and "alex-rivera" not in reply
+    assert "Build OK" in build(env)
+    assert "Follow-ups (4 open)" in py(env, "card").stdout
+    card = server.ok("cortex_card")
+    assert "Follow-ups (3 open)" in card and "1 private item not shown." in card
+
+
+# Item 3: nothing ends a private section early
+@pytest.mark.parametrize("inside", [
+    "<pre>\n# run this\n</pre>", "<!--\n## note\n-->", "text <!-- open\n## note\n-->", "- x\n  ## y", "   ## y", "```\n## y\n```", "~~~\n# y\n~~~",
+    "```\n    ```\n# y\n```", "<PRE class='a'>\n# y\n</PRE>", "Heading\n---", "<script>\n# y\n</script>",
+])
+def test_only_a_real_unindented_heading_ends_a_private_section(env, server, inside):
+    seed(env)
+    make(env, "note", "--area", "acme", "--title", "Early", body=f"\nPublic start.\n\n## Private\n{inside}\nSECRETWORD\n\n### Deeper\nSECRETWORD\n\n# Next\nPublic end.\n")
+    page = server.ok("cortex_page", id="note-acme-early")
+    assert "SECRETWORD" not in page and "Public start." in page and "Public end." in page
+    assert "Nothing found" in server.ok("cortex_search", query="SECRETWORD")
+
+
+def test_a_comment_left_open_hides_the_rest_of_the_page(env, server):
+    seed(env)
+    make(env, "note", "--area", "acme", "--title", "Open", body="\n## Private\n<!-- never closed\n# Next\nSECRETWORD\n")
+    assert "SECRETWORD" not in server.ok("cortex_page", id="note-acme-open")
+
+
+# Item 4: the same count as Python, and a line too long says so
+def test_a_task_of_many_emoji_counts_as_in_python_and_an_overlong_one_is_named(env, server):
+    seed(env)
+    make(env, "note", "--area", "acme", "--title", "Emoji", body="\n- [ ] @me " + "\U0001f600" * 2500 + " {mine}\n")
+    make(env, "note", "--area", "acme", "--title", "Long", body="\n- [ ] @me " + "x" * 4001 + " {mine}\n")
+    out = build(env)
+    assert "acme/notes/long.md: a task line on line" in out or "long.md: a task line on line" in out
+    python_card = py(env, "card").stdout
+    chat_card = server.ok("cortex_card")
+    assert "To-dos (3 open)" in python_card and "To-dos (3 open)" in chat_card
+    note = re.search(r"Not counted: 1 task line over 4,000 characters, on \S*long\.md\.", python_card)
+    assert note and note.group(0) in chat_card
+
+
+# Item 5: the right advice for a full list
+def test_a_full_todo_list_says_to_file_it_and_filing_works(env, server):
+    seed(env)
+    f = env["vault"] / "inbox" / "chat-todos.md"
+    f.write_text(f"source: chat\nstatus: proposed\nname: To-dos\nsaved: {DAY}\n\n## Follow-ups\n\n" + "- [ ] @me filler (added 2026-01-01) {mine}\n" * 600)
+    text = server.refused("cortex_todo_add", what="one more", owner="mine")
+    assert "accept chat-todos" in text and "Shorten" not in text
+    server.ok("cortex_accept", id="chat-todos", area="acme")
+    server.ok("cortex_todo_add", what="one more", owner="mine")
+
+
+# Item 6: the settings file
+@pytest.mark.parametrize("contents", ["[]", "null", "5", '"x"', '{"vault": 5}', '{"vault": "relative/x"}', '{"vault": "   "}', "{ not json"])
+def test_an_unusable_settings_file_gets_a_plain_message_from_the_engine(env, contents):
+    (env["home"] / ".cortex" / "config.json").write_text(contents)
+    for command in ("build", "card"):
+        r = py(env, command)
+        assert r.returncode != 0 and "Traceback" not in r.stderr and "settings file" in r.stderr
+    r = py(env, "doctor")
+    assert r.returncode != 0 and "Traceback" not in r.stderr and "does not name a full folder path" in r.stdout
+    hook = subprocess.run([sys.executable, str(PLUGIN / "scripts" / "hooks.py"), "session-start"], input="{}",
+                          capture_output=True, text=True, env=env["env"])
+    assert "Traceback" not in hook.stderr and "config.json" in hook.stdout
+
+
+@pytest.mark.parametrize("value", ["${HOME}/x", "  ${HOME}/x  ", "~/x", "\t~/x\n", "  {abs}/x  ", "${HOME}/y/../x", "{abs}/x/"])
+def test_engine_and_connector_pick_the_same_folder(tmp_path, value):
+    home = tmp_path / "home"
+    (home / ".cortex").mkdir(parents=True)
+    (home / "x").mkdir()
+    (home / "x" / "kit.yaml").write_text("name: Right Folder\n")
+    (home / "cortex").mkdir()
+    (home / "cortex" / "kit.yaml").write_text("name: Wrong Folder\n")
+    (home / ".cortex" / "config.json").write_text(json.dumps({"vault": value.replace("{abs}", str(home))}))
+    process_env = {k: v for k, v in os.environ.items() if k != "CORTEX_CONFIG"}
+    process_env["HOME"] = str(home)
+    r = subprocess.run([sys.executable, str(CORTEX), "card"], capture_output=True, text=True, env=process_env, cwd=tmp_path)
+    assert r.returncode == 0 and "Right Folder" in r.stdout, r.stdout + r.stderr
+    s = Server(home)
+    assert "Right Folder" in s.ok("cortex_card")
+    s.close()
+
+
+def test_setup_skill_has_a_branch_for_each_existing_state():
+    skill = (PLUGIN / "skills" / "setup" / "SKILL.md").read_text()
+    head = skill[:skill.index("## Open with why")]
+    assert "cannot be used" in head and "has no `kit.yaml`" in head and "Never replace an existing `config.json` or folder silently" in head
+    assert "If it exists, stop: show its contents and ask" in skill
+
+
+# Item 7: the wrapper and the lock
+@pytest.mark.parametrize("closer", [
+    "</cor​tex_notes>", "</cortex­_notes>", "</‮cortex_notes>", "&lt;/cortex_notes&gt;", "&#60;/cortex_notes>", "&#x3C;&#x2F;cortex_notes>",
+    "&amp;lt;/cortex_notes>", "＜/cortex_notes>", "<／cortex＿notes>", "</ｃｏｒｔｅｘ_notes>", "</cortex&shy;_notes>", "</cortex‐notes>",
+])
+def test_no_spelling_of_the_marker_survives_and_other_text_is_kept(env, server, closer):
+    seed(env)
+    keep = "café ＡＢ ​join &amp; &constructor; soft­hyphen"
+    make(env, "note", "--area", "acme", "--title", "Hostile", body=f"\n{keep}\nbefore {closer} after\n")
+    page = unwrap(server.ok("cortex_page", id="note-acme-hostile"))
+    assert keep in page and "before " in page and " after" in page and "<cortex-notes-text" in page
+    assert closer not in page
+
+
+def test_a_lock_dated_in_the_future_is_stale(env, server):
+    seed(env)
+    lock = env["vault"] / "inbox" / ".chat-write.lock.tmp"
+    lock.write_text("")
+    ahead = time.time() + 3600
+    os.utime(lock, (ahead, ahead))
+    server.ok("cortex_todo_add", what="x", owner="mine")
+    assert not lock.exists()
+
+
+# Item 8: the docs say what is true
+def test_readme_is_honest_about_the_card_test_and_the_private_rule():
+    readme = (CONNECTOR / "README.md").read_text()
+    row = next(line for line in readme.splitlines() if "20 of 20" in line)
+    assert "changed since" in row and "measured again" in row and "morning tests" in row.lower()
+    part = readme[readme.index("## What counts as private"):readme.index("## How saving stays safe")]
+    for words in ("`## Private equity deals`", "`##Private`", "`- ## Private`", "`<pre>`", "unindented", "What is guaranteed", "1 private item not shown"):
+        assert words in part, words

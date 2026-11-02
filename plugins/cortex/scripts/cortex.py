@@ -118,19 +118,37 @@ META_RE = re.compile(r"\((due|added|done)\s+(\d{4}-\d{2}-\d{2})\)")
 # ---------------------------------------------------------------- config / vault
 
 def load_config() -> dict:
+    """The settings file as a dict. Missing, broken, or anything but an object ([], null, 5) gives {}."""
     try:
-        return json.loads(CONFIG.read_text())
+        cfg = json.loads(CONFIG.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
+    return cfg if isinstance(cfg, dict) else {}
+
+
+def config_vault(cfg) -> Path | None:
+    """The folder the settings name, or None if they name no usable one. Keep in step with vaultSource
+    and expandHome in connector/server/vault.js: spaces around the value go, ${HOME} and a leading ~
+    mean the home folder, and anything still not absolute is not used."""
+    raw = cfg.get("vault") if isinstance(cfg, dict) else None
+    if not isinstance(raw, str):
+        return None
+    v = raw.strip().replace("${HOME}", str(HOME))
+    if v == "~" or v.startswith(("~/", "~\\")):
+        v = str(HOME) + v[1:]
+    return Path(v).resolve() if v and Path(v).is_absolute() else None
 
 
 def vault_path(arg: str | None = None) -> Path:
     if arg:
         return Path(arg).expanduser().resolve()
-    cfg = load_config()
-    if not cfg.get("vault"):
-        sys.exit("Cortex is not set up yet. Say 'set up my cortex' in Claude to begin.")
-    return Path(cfg["vault"]).expanduser().resolve()
+    vault = config_vault(load_config())
+    if vault:
+        return vault
+    if CONFIG.exists():
+        sys.exit(f"Cortex is not set up yet: your settings file {CONFIG} is there, but it does not name a full folder path. "
+                 'It should look like {"vault": "/path/to/your/cortex"}. Fix that file, or remove it and say \'set up my cortex\' in Claude.')
+    sys.exit("Cortex is not set up yet. Say 'set up my cortex' in Claude to begin.")
 
 
 def today() -> str:
@@ -335,7 +353,7 @@ def validate(pages: list[Page], vault: Path, people: set[str]) -> tuple[list[str
                     pe.append(f"source '{src}' is not in the vault")
             if m.get("superseded_by") and m["superseded_by"] not in all_ids:
                 pe.append(f"superseded_by '{m['superseded_by']}' does not exist")
-            for _, line in task_lines(p.body.split("\n")):
+            for n, line in task_lines(p.body.split("\n")):
                 fm = FOLLOWUP_RE.match(line)
                 who = fm.group("person") if fm else ""
                 if fm and who in headerless_people:
@@ -344,6 +362,8 @@ def validate(pages: list[Page], vault: Path, people: set[str]) -> tuple[list[str
                     pe.append(f"follow-up names @{who} but people/{who}.md does not exist")
                 elif fm and who in me and fm.group("owner") == "theirs":
                     warnings.append(f"{p.rel}: '@{who} ... {{theirs}}' reads as owed to yourself - use {{mine}} for your own to-do")
+                elif TASKLIKE_RE.match(line) and len(line) > MAX_TASK_LINE:
+                    warnings.append(f"{p.rel}: a task line on line {getattr(p, 'body_line', 1) + n} is over {MAX_TASK_LINE:,} characters, so it is not counted - shorten it")
                 elif re.match(r"^\s*-\s\[[ xX]\]\s+@", line) and not fm:
                     warnings.append(f"{p.rel}: follow-up line not in the standard shape: '{line.strip()[:80]}'")
         if not p.errors:
@@ -384,6 +404,7 @@ def parse_task(line: str, me: set[str] = frozenset({"me"})) -> dict | None:
 FENCE_RE = re.compile(r"^(?P<indent>[ \t]*)(?P<fence>`{3,}|~{3,})(?P<rest>.*)$")
 LIST_ITEM_RE = re.compile(r"^[ \t]*(?:[-*+]|\d{1,9}[.)])(?:[ \t]|$)")
 TASKLIKE_RE = re.compile(r"^\s*-\s\[[ xX]\]\s+@")
+OPEN_TASK_RE = re.compile(r"^\s*-\s\[ \]\s+@")
 
 
 def _indent(s: str) -> int:
@@ -516,6 +537,17 @@ def last_backup(vault: Path) -> str | None:
     return None
 
 
+def overlong_tasks(pages: list[Page]) -> tuple[int, list[str]]:
+    """Open task lines too long to count, and the pages they are on. The same as overlongTasks in vault.js."""
+    count, rels = 0, []
+    for p in pages:
+        here = sum(1 for _, l in task_lines(p.body.split("\n")) if OPEN_TASK_RE.match(l) and len(l) > MAX_TASK_LINE)
+        if here:
+            rels.append(p.rel)
+        count += here
+    return count, rels
+
+
 def render_card(pages: list[Page], items: list[dict], vault: Path) -> str:
     now = dt.date.today()
     cfg = parse_kit(vault)
@@ -576,6 +608,11 @@ def render_card(pages: list[Page], items: list[dict], vault: Path) -> str:
     loose = loose_notes(vault)
     if loose:
         lines += [f"Loose notes: {len(loose)} with no header. Say 'open the sorting desk'.", ""]
+    long_count, long_pages = overlong_tasks(pages)
+    if long_count:
+        extra = f" and {len(long_pages) - 3} more" if len(long_pages) > 3 else ""
+        lines += [f"Not counted: {long_count} task line{'' if long_count == 1 else 's'} over 4,000 characters, "
+                  f"on {', '.join(long_pages[:3])}{extra}.", ""]
     lb = last_backup(vault)
     if lb:
         age = (now - dt.date.fromisoformat(lb)).days
@@ -925,11 +962,10 @@ def cmd_doctor(args) -> int:
         print(f"{'OK ' if good else 'FIX'} {text}{'' if good or not fix else ' - ' + fix}")
     clt = subprocess.run(["xcode-select", "-p"], capture_output=True).returncode == 0
     line(clt, "Apple Command Line Tools (git, python3)", "run: xcode-select --install")
-    cfg = load_config()
-    line(bool(cfg.get("vault")), f"setup done ({CONFIG})", "say 'set up my cortex'")
-    if not cfg.get("vault"):
+    vault = config_vault(load_config())
+    line(bool(vault), f"setup done ({CONFIG})", "that file does not name a full folder path - fix it" if CONFIG.exists() else "say 'set up my cortex'")
+    if not vault:
         return 1
-    vault = Path(cfg["vault"]).expanduser()
     line(vault.exists(), f"cortex folder {vault}")
     cloud = any(s in str(vault) for s in ("Mobile Documents", "iCloud", "OneDrive", "Dropbox", "Google Drive"))
     line(not cloud, "cortex folder is outside iCloud/OneDrive/Dropbox", "move it - sync folders damage git")

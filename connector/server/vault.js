@@ -9,6 +9,7 @@ const GENERATED = '_cortex';
 const SKIP_DIRS = new Set(['.git', '.claude', GENERATED, 'sources', '_templates', 'node_modules']);
 const NOT_PAGES_ANYWHERE = new Set(['CLAUDE.md', 'README.md']);
 const NOT_PAGES_AT_ROOT = new Set(['AGENTS.md', 'GEMINI.md', 'home.md']);
+const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const REQUIRED = ['id', 'title', 'type', 'status', 'created', 'updated', 'summary'];
 const MAX_FILE_BYTES = 2 * 1024 * 1024; // a page bigger than this is not read
 const MAX_TASK_LINE = 4000; // a longer line is never a task line, here and in cortex.py
@@ -22,12 +23,20 @@ const FENCE_RE = /^(?<indent>[ \t]*)(?<fence>`{3,}|~{3,})(?<rest>[^\n]*)$/;
 const LIST_ITEM_RE = /^[ \t]*(?:[-*+]|\d{1,9}[.)])(?:[ \t]|$)/;
 const PRIVATE_TAG = /\{\s*private\s*\}/i;
 const HEADING_RE = /^ {0,3}(#{1,6})[ \t]+/;
-const LOOSE_HEADING_RE = /^[ \t>]*(#{1,6})[ \t]*([^]*)/; // for finding a private heading: wider, on purpose
-const HTML_HEADING_RE = /^\s*<h([1-6])\b[^>]*>([^]*)/i;
+const ATX_RE = /^(#{1,6})[ \t]+([^]*)$/;
+const ENDS_SECTION_RE = /^(#{1,6})[ \t]+\S/; // unindented, with a title
+const HTML_HEADING_RE = /^<h([1-6])\b[^>]*>([^]*?)(?:<\/h\1\s*>)?[ \t]*$/i;
+const CONTAINERS_RE = /^(?:(?:>[ \t]?|[-*+][ \t]+|\d{1,9}[.)][ \t]+)[ \t]*)*/; // quote and list markers in front of a heading
 const SETEXT_RE = /^ {0,3}(=+|-+)[ \t]*$/;
+const SETEXT_TITLE_RE = /^ {0,3}Private[ \t]*$/;
+const RULE_RE = /^ {0,3}([-*_])[ \t]*(?:\1[ \t]*){2,}$/;
+const RAW_OPEN_RE = /<!--|<(pre|script|style|textarea)\b/i;
+const OPEN_TASK_RE = /^\s*-\s\[ \]\s+@/;
 const HEADING_TEXT_CHARS = 300;
-const INVISIBLE = '\\u200b-\\u200d\\u2060\\ufeff';
-const NOTES_TAG_RE = new RegExp(`<[\\s\\\\/${INVISIBLE}]*cortex[\\s_\\-${INVISIBLE}]*notes`, 'gi');
+const INVISIBLE_RE = /[\p{Cf}\p{DI}]/gu;
+const NOTES_TAG_RE = /<[\s\\/]*cortex[\s_\p{Pd}]*notes/giu;
+const ENTITY_OR_CHAR_RE = /&(?:amp;)*(?:#[0-9]+|#x[0-9a-f]+|[a-z]+);?|[^]/giu;
+const ENTITIES = { lt: '<', gt: '>', sol: '/', bsol: '\\', lowbar: '_', underbar: '_', hyphen: '-', dash: '-', nbsp: ' ', shy: '', zwsp: '', zwj: '', zwnj: '', lrm: '', rlm: '', tab: ' ', newline: ' ' };
 
 // A refusal or problem to show the person in plain words. Anything else is a real bug.
 class UserError extends Error {}
@@ -56,8 +65,39 @@ function plainLetters(text) {
 // A slug the kit accepts, or '' when the text has nothing to make one from. Never 'untitled'.
 const plainSlug = (text) => bareSlug(plainLetters(text));
 
+// One entity or character as it reads: format characters gone, compatibility forms made plain.
+function foldToken(token) {
+  let plain = token;
+  const entity = /^&(?:amp;)*(#x?)?([0-9a-z]+);?$/i.exec(token);
+  if (entity && entity[1]) {
+    const code = parseInt(entity[2], entity[1].length === 2 ? 16 : 10);
+    if (code <= 0x10ffff) plain = String.fromCodePoint(code);
+  } else if (entity && typeof ENTITIES[entity[2].toLowerCase()] === 'string') {
+    plain = ENTITIES[entity[2].toLowerCase()];
+  }
+  return plain.normalize('NFKC').replace(INVISIBLE_RE, '');
+}
+
 // Text that repeats anything stored or supplied can never close the notes marker, however it is spelled.
-const neutralise = (text) => String(text).replace(NOTES_TAG_RE, '<cortex-notes-text');
+// The matching is done on a folded copy, so a match replaces only its own span and all other text stays as stored.
+function neutralise(value) {
+  const text = String(value);
+  let folded = '';
+  const from = [];
+  for (const m of text.matchAll(ENTITY_OR_CHAR_RE)) {
+    const plain = foldToken(m[0]);
+    for (let i = 0; i < plain.length; i += 1) from.push(m.index);
+    folded += plain;
+  }
+  from.push(text.length);
+  let out = '';
+  let at = 0;
+  for (const m of folded.matchAll(NOTES_TAG_RE)) {
+    out += `${text.slice(at, from[m.index])}<cortex-notes-text`;
+    at = from[m.index + m[0].length];
+  }
+  return out + text.slice(at);
+}
 
 // ---------------------------------------------------------------- finding the cortex
 
@@ -208,12 +248,15 @@ function withoutPrivateLines(text) {
   return { text: kept.join('\n'), withheld: lines.length - kept.length };
 }
 
-// True for Private, **Private**, _Private_, [Private], <b>Private</b>: and any heading tagged {private}.
+// True when a heading's whole title is Private, ignoring case, emphasis marks, a trailing {private},
+// closing hashes and trailing spaces.
 function namesPrivate(title) {
-  const t = title.slice(0, HEADING_TEXT_CHARS);
-  if (PRIVATE_TAG.test(t)) return true;
-  const plain = t.normalize('NFKC').replace(/<[^>]*>/g, ' ').replace(/[*~`\\_]/g, ' ').replace(/^[^\p{L}\p{N}]+/u, '');
-  return /^private(?![\p{L}\p{N}])/i.test(plain);
+  let t = title.slice(0, HEADING_TEXT_CHARS).normalize('NFKC').replace(INVISIBLE_RE, '').replace(/<[^>]*>/g, '');
+  for (let before = ''; before !== t;) {
+    before = t;
+    t = t.trim().replace(/[ \t]*\{\s*private\s*\}$/i, '').replace(/(?:^|[ \t]+)#+$/, '').replace(/^[*_~`]+|[*_~`]+$/g, '');
+  }
+  return /^private$/i.test(t);
 }
 
 function isHeading(line) {
@@ -221,51 +264,117 @@ function isHeading(line) {
   return m ? m[1].length : 0;
 }
 
-// If this line opens a private section: its level, and whether the next line is its underline.
-// Finding one is wide on purpose: when in doubt, hide.
-function privateHeading(line, next) {
-  const head = line.slice(0, MAX_TASK_LINE);
-  const m = LOOSE_HEADING_RE.exec(head) || HTML_HEADING_RE.exec(head);
-  if (m && namesPrivate(m[2])) return { level: Number(m[1]) || m[1].length, lines: 1 };
-  const under = next === undefined ? null : SETEXT_RE.exec(next);
-  if (under && head.trim() && namesPrivate(head)) return { level: under[1][0] === '=' ? 1 : 2, lines: 2 };
+const indentOf = (line) => expandedLength(/^[ \t]*/.exec(line)[0]);
+
+// A setext title has to start its own paragraph: otherwise the heading is the whole paragraph.
+const startsBlock = (prev) => prev === undefined || !prev.trim() || isHeading(prev) > 0 || RULE_RE.test(prev) || FENCE_RE.test(prev);
+
+// If line i opens a private section: its level, and how many lines the heading takes. A heading may sit
+// behind list or quote markers. Indented 4 or more outside a list item it is code, not a heading.
+function privateHeading(lines, i, inItem) {
+  const line = lines[i];
+  if (indentOf(line) < 4 || inItem) {
+    const head = line.slice(0, MAX_TASK_LINE).trimStart().replace(CONTAINERS_RE, '');
+    const m = ATX_RE.exec(head) || HTML_HEADING_RE.exec(head);
+    if (m && namesPrivate(m[2])) return { level: Number(m[1]) || m[1].length, lines: 1 };
+  }
+  const under = lines[i + 1] === undefined ? null : SETEXT_RE.exec(lines[i + 1]);
+  if (under && SETEXT_TITLE_RE.test(line) && startsBlock(lines[i - 1])) return { level: under[1][0] === '=' ? 1 : 2, lines: 2 };
   return null;
 }
 
-// Removes every private section down to the next # heading of the same or a higher level. A heading
-// inside a code block does not end one, and neither does an underlined heading, because a --- under a
-// line is often just a divider. So nothing below can leak; at worst too much stays hidden.
+// For each line and fence character, the longest closing fence at or below it, found in one pass.
+function closerReach(lines) {
+  const reach = { '`': new Int32Array(lines.length + 1), '~': new Int32Array(lines.length + 1) };
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    reach['`'][i] = reach['`'][i + 1];
+    reach['~'][i] = reach['~'][i + 1];
+    const m = FENCE_RE.exec(lines[i]);
+    if (m && !m.groups.rest.trim()) {
+      const c = m.groups.fence[0];
+      reach[c][i] = Math.max(reach[c][i], m.groups.fence.length);
+    }
+  }
+  return reach;
+}
+
+// What a line leaves open inside a private section: the pattern that closes a comment or raw HTML block, or null.
+function leftOpen(line) {
+  let rest = line;
+  for (;;) {
+    const m = RAW_OPEN_RE.exec(rest);
+    if (!m) return null;
+    const close = m[1] ? new RegExp(`</${m[1]}\\s*>`, 'i') : /-->/;
+    rest = rest.slice(m.index + m[0].length);
+    const end = close.exec(rest);
+    if (!end) return close;
+    rest = rest.slice(end.index + end[0].length);
+  }
+}
+
+// Removes every private section. What is guaranteed: once a section is open, everything stays hidden
+// until an unindented # heading of the same or a higher level, outside code fences, <pre> and other raw
+// HTML blocks and comments; anything left unclosed hides the rest of the page. Underlined and indented
+// headings never end a section. Outside a section, a fence that really closes shields its contents from
+// opening one, and an unclosed fence shields nothing. What is not guaranteed: text whose heading does not
+// meet the rule in namesPrivate or privateHeading opens nothing and stays visible, unless a line has its
+// own {private} tag.
 function withoutPrivateSections(body) {
   const lines = body.split('\n');
+  const reach = closerReach(lines);
   const out = [];
   const hidden = [];
   let level = 0;
   let fence = '';
+  let raw = null;
+  let inList = false;
+  let inItem = false;
   let withheld = 0;
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i];
-    const opener = fence ? null : privateHeading(line, lines[i + 1]);
+    const f = FENCE_RE.exec(line);
+    if (fence) {
+      if (f && f.groups.fence[0] === fence[0] && f.groups.fence.length >= fence.length && !f.groups.rest.trim()
+          && (!level || expandedLength(f.groups.indent) < 4)) fence = '';
+      (level ? hidden : out).push(line);
+      continue;
+    }
+    if (raw) {
+      const end = raw.exec(line);
+      if (end) raw = leftOpen(line.slice(end.index + end[0].length));
+      hidden.push(line);
+      continue;
+    }
+    const opener = privateHeading(lines, i, inItem);
     if (opener) {
       level = level ? Math.min(level, opener.level) : opener.level;
-      fence = '';
+      inItem = false;
       withheld += 1;
       hidden.push(...lines.slice(i, i + opener.lines));
       i += opener.lines - 1;
       continue;
     }
     if (!level) {
+      if (f && opensFence(f, inList) && reach[f.groups.fence[0]][i + 1] >= f.groups.fence.length) {
+        fence = f.groups.fence;
+      } else if (line.trim()) {
+        if (LIST_ITEM_RE.test(line)) inList = true;
+        else if (expandedLength(line) < 2) inList = false;
+        inItem = LIST_ITEM_RE.test(line) || (inItem && indentOf(line) >= 2);
+      }
       out.push(line);
       continue;
     }
-    const f = FENCE_RE.exec(line);
-    if (fence) {
-      if (f && f.groups.fence[0] === fence[0] && f.groups.fence.length >= fence.length && !f.groups.rest.trim()) fence = '';
-    } else if (f) {
-      fence = f.groups.fence;
-    } else if (isHeading(line) && isHeading(line) <= level) {
-      level = 0;
-      out.push(line);
-      continue;
+    if (f) {
+      fence = f.groups.fence; // any fence, even an unusual one: when in doubt, keep hiding
+    } else {
+      const heading = ENDS_SECTION_RE.exec(line);
+      if (heading && heading[1].length <= level) {
+        level = 0;
+        out.push(line);
+        continue;
+      }
+      raw = leftOpen(line);
     }
     hidden.push(line);
   }
@@ -284,6 +393,8 @@ function publicText(text) {
 function publicPage(rel, source) {
   const page = parsePage(rel, source);
   const clean = publicText(page.body);
+  // How many open task lines the hiding took away, so the card can say so.
+  page.hiddenTasks = clean.withheld ? Math.max(0, openTaskCount(page.body) - openTaskCount(clean.text)) : 0;
   page.body = clean.text;
   page.withheld = clean.withheld;
   for (const key of Object.keys(page.meta)) {
@@ -365,11 +476,17 @@ function selfSlugs(vault) {
 
 // ---------------------------------------------------------------- task lines
 
+// In characters as Python counts them, not UTF-16 units: an emoji is one.
+function isTooLong(line) {
+  if (line.length <= MAX_TASK_LINE) return false;
+  return line.length > MAX_TASK_LINE * 2 || [...line].length > MAX_TASK_LINE;
+}
+
 // A task line: - [ ] @person what (due D) (added D) (done D) {mine|theirs} {doing}
 // The same as task_match in cortex.py. It reads the ends of the line by hand instead of one big
 // pattern, so a line of spaces cannot make it work for minutes.
 function matchTask(line) {
-  if (line.length > MAX_TASK_LINE) return null;
+  if (isTooLong(line)) return null;
   const head = TASK_HEAD_RE.exec(line);
   if (!head) return null;
   let rest = line.slice(head[0].length).trimEnd();
@@ -413,6 +530,10 @@ function expandedLength(s) {
   return col;
 }
 
+function opensFence(m, inList) {
+  return !(m.groups.fence[0] === '`' && m.groups.rest.includes('`')) && (expandedLength(m.groups.indent) < 4 || inList);
+}
+
 // The lines that can hold a task: outside fenced code blocks, by the same rules as scan_body.
 function taskCapableLines(lines) {
   const out = [];
@@ -424,7 +545,7 @@ function taskCapableLines(lines) {
       if (m && m.groups.fence[0] === fence[0] && m.groups.fence.length >= fence.length && !m.groups.rest.trim()) fence = '';
       continue;
     }
-    if (m && !(m.groups.fence[0] === '`' && m.groups.rest.includes('`')) && (expandedLength(m.groups.indent) < 4 || inList)) {
+    if (m && opensFence(m, inList)) {
       fence = m.groups.fence;
       continue;
     }
@@ -448,6 +569,27 @@ function followups(pages, me) {
   return out;
 }
 
+const NOBODY = new Set();
+
+function openTaskCount(body) {
+  return taskCapableLines(body.split('\n')).filter((line) => {
+    const t = parseTask(line, NOBODY);
+    return t && !t.closed;
+  }).length;
+}
+
+// Open task lines too long to count, and the pages they are on. The same as overlong_tasks in cortex.py.
+function overlongTasks(pages) {
+  let count = 0;
+  const rels = [];
+  for (const page of pages) {
+    const here = taskCapableLines(page.body.split('\n')).filter((l) => OPEN_TASK_RE.test(l) && isTooLong(l)).length;
+    if (here) rels.push(page.rel);
+    count += here;
+  }
+  return { count, rels };
+}
+
 // ---------------------------------------------------------------- the inbox
 
 // Regular .md files directly in inbox/. A symlink there is ignored.
@@ -461,6 +603,12 @@ function inboxFiles(vault) {
     return [];
   }
   return entries.filter((e) => e.isFile() && e.name.endsWith('.md')).map((e) => e.name).sort(cmp);
+}
+
+// A line that files as an open follow-up. The inbox and filing count the same lines.
+function isOpenFollowup(line) {
+  const t = parseTask(line, NOBODY);
+  return Boolean(t) && !t.closed && SLUG_RE.test(t.person);
 }
 
 const SECTIONS = ['Summary', 'Decisions', 'Follow-ups', 'Open questions'];
@@ -509,5 +657,5 @@ function parseProposal(text) {
 module.exports = {
   UserError, GENERATED, MAX_FILE_BYTES, PRIVATE_TAG, PROPOSAL_NOTE, cmp, localDate, slugify, plainLetters, plainSlug, neutralise, vaultLocation, vaultSource,
   folderReason, configPointsNowhere, requireVault, isInside, isGenerated, readText, parseValue, publicPage, publicText, withoutPrivateSections,
-  walk, get, parseKit, selfSlugs, parseTask, followups, inboxFiles, parseProposal,
+  walk, get, parseKit, selfSlugs, parseTask, followups, overlongTasks, inboxFiles, parseProposal, isOpenFollowup, SLUG_RE,
 };
