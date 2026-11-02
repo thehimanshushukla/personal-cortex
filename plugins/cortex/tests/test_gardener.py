@@ -412,10 +412,11 @@ POISON = [
     "hash 9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08 end",
     "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBg\n-----END PRIVATE KEY----- done",
     "card 4111 1111 1111 1111 end",
+    "code a1b2c3d4e5f6g7h8i9j0 here",
     "‮evil​ text",
 ]
 LEAKS = ["\n", "\r", " ", " ", "<", ">", "‮", "​", "sk-ant", "ghp_", "AKIA", "hunter2", "abc123",
-         "abcdefgh12345678", "s3cr3t", "eyJ", "9f86d081", "MIIE", "4111"]
+         "abcdefgh12345678", "s3cr3t", "eyJ", "9f86d081", "MIIE", "4111", "a1b2c3d4"]
 
 
 @pytest.mark.parametrize("text", POISON)
@@ -459,6 +460,13 @@ def test_no_transcript_text_anywhere_but_the_title(env):
         for f in folder.rglob("*"):
             if f.is_file() and ".git" not in f.parts:
                 assert CANARY.encode() not in f.read_bytes(), f
+
+
+def test_a_cwd_that_is_not_a_path_is_not_kept(env):
+    write_jsonl(env["home"] / ".claude" / "projects" / "-p" / "c.jsonl",
+                [user(f"about the cortex {i}", CANARY) for i in range(3)])
+    assert report(env)["missed"][0]["folder"] == "-p"
+    assert CANARY not in (env["home"] / ".cortex" / "gardener" / "cache.json").read_text()
 
 
 def test_state_is_private_and_outside_the_vault(env):
@@ -768,7 +776,33 @@ class Opener:
 
 
 def board(env):
-    return B.Board(env["vault"], opener=Opener())
+    return B.Board(env["vault"], opener=Opener(), gardener=True)
+
+
+def test_a_board_made_elsewhere_opens_no_transcript(env, monkeypatch):
+    """Other code embeds Board in-process, some of it under a real HOME: only the board command opts in."""
+    claude_file(env)
+    monkeypatch.setattr(G, "read_transcript", lambda *a: pytest.fail("a transcript was opened"))
+    ib = B.Board(env["vault"]).state()["inbox"]
+    assert ib["missed"] == []
+    assert not (env["home"] / ".cortex" / "gardener").exists()
+
+
+def test_the_board_command_shows_missed_sessions(env):
+    """The real path: the command, its server, its page data. No browser is opened."""
+    import urllib.request
+    claude_file(env, msgs=("Fix the report", "two", "three"))
+    p = subprocess.Popen([sys.executable, str(CORTEX), "board", "--no-browser"], stdout=subprocess.PIPE, text=True, env=env["env"])
+    try:
+        p.stdout.readline()
+        url = p.stdout.readline().strip()
+        base, token = url.split("/?t=")
+        with urllib.request.urlopen(f"{base}/api/state?t={token}", timeout=20) as r:
+            rows = json.loads(r.read())["inbox"]["missed"]
+        assert [x["title"] for x in rows] == ["Fix the report"]
+    finally:
+        p.terminate()
+        p.wait(timeout=10)
 
 
 def test_inbox_lists_missed_with_prompt_and_dismiss(env):
@@ -787,7 +821,7 @@ def test_inbox_lists_missed_with_prompt_and_dismiss(env):
     before = sorted(f.as_posix() for f in env["vault"].rglob("*") if ".git" not in f.parts)
     assert b.dismiss(r["id"])["ok"]
     assert b.state()["inbox"]["missed"] == []
-    assert B.Board(env["vault"]).state()["inbox"]["missed"] == []   # a new board remembers
+    assert board(env).state()["inbox"]["missed"] == []   # a new board remembers
     assert sorted(f.as_posix() for f in env["vault"].rglob("*") if ".git" not in f.parts) == before
 
 

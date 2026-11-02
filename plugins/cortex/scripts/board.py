@@ -270,8 +270,9 @@ def default_opener(target: str) -> tuple[bool, str]:
 # ---------------------------------------------------------------- the board (no HTTP here)
 
 class Board:
-    def __init__(self, vault: Path, opener=default_opener):
+    def __init__(self, vault: Path, opener=default_opener, gardener: bool = False):
         self.vault = Path(vault).expanduser().resolve()
+        self.gardener = gardener   # off unless asked for: only the board command opens transcripts
         self.opener = opener
         self.lock = threading.Lock()
         self.ids: dict[str, tuple] = {}   # id -> ("task", rel, line, occurrence) or ("inbox", rel, prompt)
@@ -372,7 +373,7 @@ class Board:
         out = {"desk": [], "notes": [], "loose": [], "unsaved": [], "git": (v / ".git").exists(),
                "missed": [], "missed_note": ""}
         try:
-            report = G.inventory(v, days=30, budget=GARDENER_SECONDS)
+            report = G.inventory(v, days=30, budget=GARDENER_SECONDS) if self.gardener else {"missed": [], "warning": "", "not_finished": 0}
             for r in report["missed"]:
                 iid, prompt = make_id("inbox", "missed", r["id"]), missed_prompt(r, v)
                 self.ids[iid] = ("missed", r["id"], prompt)
@@ -884,7 +885,7 @@ def run(args) -> int:
                   + stop_command())
         return 1
     try:
-        srv = BoardServer(Board(vault), args.port or 0)
+        srv = BoardServer(Board(vault, gardener=True), args.port or 0)
     except OSError as e:
         print(f"Could not start the board on port {args.port} ({e.strerror}). Try again without --port.")
         lock.close()
