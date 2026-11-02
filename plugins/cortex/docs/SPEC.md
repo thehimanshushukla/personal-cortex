@@ -145,6 +145,16 @@ The board (`cortex.py board`) shows these lines as cards. A move edits only that
 
 The build collects every open follow-up into `_cortex/followups.md`.
 
+## The chat lane (`connector/`, not yet released)
+
+A separate Node extension for the desktop app's Chat tab. It needs no Python. These rules add to the contract:
+
+- **Proposals.** Chat writes land in `inbox/` as `chat-<date>-<slug>.md` (one saved chat) or `chat-todos.md` (added to-dos). A proposal starts with plain lines `source: chat`, `status: proposed`, `name: ...`, `saved: ...`, with **no `---` rule**. That makes it a loose note to the build, on purpose: `proposed` is not a page status, and its task lines may name people with no page yet, so as a page it would stop the build. Its task lines do not count anywhere until it is accepted. The sections are `## Summary`, `## Decisions`, `## Follow-ups` and `## Open questions`.
+- **Accepting** writes one new session page (`source: chat`, `sources:` pointing at the kept proposal), creates a short `people/<slug>.md` for each person who has no page, and moves the proposal to `sources/<yyyy-mm>/`. It never edits an existing page.
+- **Its own card.** The extension computes the same card as `cortex.py card` from the pages, apart from the hints that name things chat cannot do. A proposal counts only in the inbox line. Until the next `cortex.py build`, `_cortex/card.md` does not include what was accepted in chat.
+- **Private parts.** A `## Private` section (down to the next heading of the same or a higher level) and any line tagged `{private}` are left out of every chat tool, including task counts on the card and search matches.
+- **Vault lookup.** `~/.cortex/config.json` if present and valid, else the folder set in the extension, else `~/cortex`.
+
 ## Scripts (`~/.cortex/engine/scripts/`)
 
 Each is plain `python3 <script> ...`, uses the standard library only, and finds the vault from `~/.cortex/config.json` unless `--vault` is given.

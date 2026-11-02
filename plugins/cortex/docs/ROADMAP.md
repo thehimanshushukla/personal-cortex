@@ -3,6 +3,7 @@
 Planned updates, in rough order. Tell us what you want first: say "send feedback".
 
 ## Next
+- **Cortex in the Chat tab (built, not yet released):** a small extension for the Claude desktop app that reads your Cortex and saves to it from Chat, desktop only. It is waiting on checks in the real app. See `connector/` in the repository.
 - **More coding tools:** Cursor, Gemini CLI and GitHub Copilot adapters (Codex works from 0.3.0).
 - **Reviewer agent:** a second opinion on an important document before it goes out, from an agent that did not write it, with a record of your rulings.
 - **Morning brief:** a short daily brief of what is due, what is waiting on others, and what has gone quiet. (The board it builds on shipped in 0.4.0: say "show my board".)

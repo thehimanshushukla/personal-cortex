@@ -73,7 +73,17 @@ Say these in your own words. Exact phrases are not needed.
 
 The thinking behind every piece is written up in the maker's Claude Code series: [thehimanshushukla.com/blog/claude-code-setup-series](https://thehimanshushukla.com/blog/claude-code-setup-series?utm_source=cortex). The guide links the right article when a question goes deeper.
 
-## 7. Help, feedback and what's next
+## 7. Cortex in the Chat tab (not yet released)
+
+A separate small extension for the Claude desktop app, in `connector/` in the kit's repository. It is one file you install by double-clicking, not part of this plugin, because the Chat tab ignores a plugin's tools and hooks.
+
+- **What it does:** shows your card, searches and opens your pages, adds to-dos, saves a chat, lists your inbox, and files a saved chat as a new session page. It can also create a new cortex for someone who has none.
+- **Where saves go:** to `inbox/`, as a proposal. Nothing counts on your card or board until you accept it. Accepting only makes new pages.
+- **Limits:** desktop app only, not web or phone. Your card loads by itself only inside a Claude Project with the instructions pasted in. It saves when you ask. It has no backup of its own, and updates mean installing a new file. Windows is untested.
+
+Full details are in `connector/README.md`.
+
+## 8. Help, feedback and what's next
 
 - **Feedback or ideas:** say "send feedback". You see exactly what is sent before it goes.
 - **Problems:** say "something is broken". It runs a health check and includes the result in the report.
