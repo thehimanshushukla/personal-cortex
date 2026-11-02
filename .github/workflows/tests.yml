@@ -12,10 +12,9 @@ jobs:
       - run: cd examples && python3 -m unittest -q test_examples.py
       - run: python3 -m pytest plugins/cortex/tests -q
       - run: python3 -m pytest connector/tests -q
-  python39:
-    runs-on: ubuntu-latest
+  mac-system-python:
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: { python-version: '3.9' }
-      - run: python3 -m compileall -q plugins/cortex/scripts
+      - run: /usr/bin/python3 --version
+      - run: /usr/bin/python3 -m compileall -q plugins/cortex/scripts
