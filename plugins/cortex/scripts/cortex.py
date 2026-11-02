@@ -21,6 +21,10 @@ Commands:
                         submit to the maker's feedback form (the skill shows it and asks first)
   board [--open] [--port N] [--no-browser] [--stop]
                         the board and inbox page on this Mac only (scripts/board.py); --stop closes it
+  gardener [--days N] [--json] [--journal [--week YYYY-Www]] [--dismiss ID] [--undismiss ID]
+                        which sessions were never logged, from local transcripts, no AI (scripts/gardener.py)
+  install-gardener [--yes]
+                        the weekly Gardener run; only on a person's yes, never from setup or upgrade
 """
 from __future__ import annotations
 
@@ -53,6 +57,7 @@ ALL_TYPES = THING_TYPES | {"thing", "area", "person", "organisation", "meeting",
 STATUSES = {"active", "done", "superseded", "archived", "draft"}
 REQUIRED = ["id", "title", "type", "status", "created", "updated", "summary"]
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+CHAT_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")   # the session a page was logged from (optional)
 SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 # A task line: - [ ] @person what (due D) (added D) (done D) {mine|theirs} {doing}
 # The dated parts are optional and in any order; {doing} is optional and comes last (0.4.0).
@@ -327,6 +332,10 @@ def validate(pages: list[Page], vault: Path, people: set[str]) -> tuple[list[str
                 if pid in seen:
                     pe.append(f"id '{pid}' is also used by {seen[pid]}")
                 seen[pid] = p.rel
+            chat = m.get("chat_id")
+            for c in (chat if isinstance(chat, list) else [chat] if chat else []):
+                if not CHAT_ID_RE.match(str(c)):
+                    warnings.append(f"{p.rel}: chat_id '{str(c)[:60]}' does not look like a session id")
             for link in m.get("links", []) if isinstance(m.get("links"), list) else []:
                 if link not in all_ids:
                     pe.append(f"link '{link}' points to a page that does not exist")
@@ -744,6 +753,13 @@ def cmd_new(args) -> int:
     if t in THING_TYPES and thing:
         fm.append(f"thing: {thing}")
     fm += ["status: active", f"created: {today()}", f"updated: {today()}"]
+    if t == "session":
+        # Which chat this page came from, so the Gardener knows it is covered. catch-up names a past session.
+        chat = args.chat_id or os.environ.get("CLAUDE_CODE_SESSION_ID") or os.environ.get("CODEX_THREAD_ID") or ""
+        if args.chat_id and not CHAT_ID_RE.match(args.chat_id):
+            sys.exit("--chat-id must be a session id")
+        if CHAT_ID_RE.match(chat):
+            fm.append(f"chat_id: {chat}")
     if t == "meeting":
         fm += [f"date: {d}", "people: []"]
     fm += ["tags: []", "links: []", "summary: "]
@@ -998,6 +1014,18 @@ def cmd_board(args) -> int:
     return board.run(args)
 
 
+def cmd_gardener(args) -> int:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import gardener
+    return gardener.run(args)
+
+
+def cmd_install_gardener(args) -> int:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import gardener
+    return gardener.install_schedule(args)
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="cortex")
     ap.add_argument("--vault")
@@ -1009,6 +1037,7 @@ def main(argv=None) -> int:
     n.add_argument("type"); n.add_argument("--area", default=""); n.add_argument("--thing", default="")
     n.add_argument("--collection", default=""); n.add_argument("--title", required=True)
     n.add_argument("--slug"); n.add_argument("--date"); n.add_argument("--json", action="store_true")
+    n.add_argument("--chat-id", default="")
     b = sub.add_parser("backup"); b.add_argument("--if-older-than-days", type=int); b.add_argument("--quiet", action="store_true")
     h = sub.add_parser("history"); h.add_argument("--days", type=int, default=30)
     sub.add_parser("sort-desk"); sub.add_parser("doctor"); sub.add_parser("install-backup")
@@ -1019,6 +1048,10 @@ def main(argv=None) -> int:
     bd = sub.add_parser("board"); bd.add_argument("--open", action="store_true")
     bd.add_argument("--port", type=int, default=0); bd.add_argument("--no-browser", action="store_true")
     bd.add_argument("--stop", action="store_true")
+    g = sub.add_parser("gardener"); g.add_argument("--days", type=int, default=7); g.add_argument("--json", action="store_true")
+    g.add_argument("--journal", action="store_true"); g.add_argument("--week"); g.add_argument("--refresh", action="store_true")
+    g.add_argument("--quiet", action="store_true"); g.add_argument("--dismiss"); g.add_argument("--undismiss")
+    ig = sub.add_parser("install-gardener"); ig.add_argument("--yes", action="store_true")
     # --vault is accepted after the subcommand too (the LaunchAgent passes it that way)
     argv = list(sys.argv[1:] if argv is None else argv)
     if "--vault" in argv[1:]:
@@ -1027,7 +1060,8 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
     fn = {"build": cmd_build, "check": cmd_check, "card": cmd_card, "new": cmd_new, "backup": cmd_backup,
           "history": cmd_history, "sort-desk": cmd_sort_desk, "doctor": cmd_doctor,
-          "install-backup": cmd_install_backup, "feedback": cmd_feedback, "board": cmd_board}[args.cmd]
+          "install-backup": cmd_install_backup, "feedback": cmd_feedback, "board": cmd_board,
+          "gardener": cmd_gardener, "install-gardener": cmd_install_gardener}[args.cmd]
     return fn(args)
 
 

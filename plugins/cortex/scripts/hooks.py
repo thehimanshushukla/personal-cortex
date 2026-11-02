@@ -97,6 +97,41 @@ def unpushed_commits(v: Path) -> int:
     return int(r.stdout.strip()) if r.returncode == 0 and r.stdout.strip().isdigit() else 0
 
 
+GARDENER = Path.home() / ".cortex" / "gardener" / "summary.json"
+GARDENER_STALE = 3600   # seconds before the start hook asks for a fresh count
+WARN_DAYS = 21
+
+
+def gardener_line() -> str:
+    """The card's count of unlogged sessions. No transcript is opened here, so a huge folder cannot
+    slow a session start: this reads one small file of numbers and ids, and a stale or missing one
+    starts a separate run in the background. Sessions logged since that run are taken off."""
+    try:
+        info = json.loads(GARDENER.read_text()) if GARDENER.stat().st_size < 64 * 1024 else {}
+    except (OSError, ValueError):
+        info = {}
+    now = dt.datetime.now().timestamp()
+    at, week, ids, oldest = info.get("at"), info.get("week"), info.get("week_ids"), info.get("risk_oldest")
+    if not isinstance(at, (int, float)) or now - at > GARDENER_STALE:
+        try:
+            subprocess.Popen([sys.executable, str(HERE / "cortex.py"), "gardener", "--refresh", "--quiet"],
+                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                             start_new_session=True)
+        except OSError:
+            pass
+    lines = []
+    if isinstance(week, int) and isinstance(ids, list):
+        done = sum(1 for s in ids[:200] if isinstance(s, str) and "/" not in s
+                   and ((STATE_ROOT / s / "logged").exists() or (STATE_ROOT / s / "skipped").exists()))
+        n = max(0, week - done)
+        if n:
+            lines.append(f"{n} session{' this week was' if n == 1 else 's this week were'} never logged - say 'catch up'.")
+    if isinstance(oldest, (int, float)) and oldest and now - oldest > WARN_DAYS * 86400:
+        lines.append(f"The oldest unlogged session is {int((now - oldest) // 86400)} days old. Claude Code deletes "
+                     "transcripts after 30 days by default - say 'catch up' soon.")
+    return "\n".join(lines)
+
+
 def session_start(p: dict) -> int:
     try:
         sync_engine()
@@ -124,6 +159,9 @@ def session_start(p: dict) -> int:
     elif unpushed:
         text += (f"\n{unpushed} saved change(s) not on GitHub yet (last push did not go through). Offer once: "
                  f"\"say 'back up my cortex' to send them\".\n")
+    missed = gardener_line()
+    if missed:
+        text += f"\n{missed}\n"
     # Weekly backup safety net: if the scheduled one was missed (Mac asleep), run it now in the background.
     try:
         subprocess.Popen([sys.executable, str(HERE / "cortex.py"), "--vault", str(v), "backup",
@@ -134,7 +172,7 @@ def session_start(p: dict) -> int:
     emit_context("SessionStart",
                  f"CORTEX (vault: {v}). This is the person's start card. Begin your FIRST reply in this session with a compact "
                  f"version of it under the heading 'Your cortex' (at most 5 short lines: what is active, anything due or overdue, "
-                 f"anything waiting such as imports or a missing backup), then answer what they asked. Do not show it again later "
+                 f"anything waiting such as imports, unlogged sessions or a missing backup), then answer what they asked. Do not show it again later "
                  f"in the session unless asked. Use it - do not re-ask what it already says. Pages are created with the cortex "
                  f"skills, wherever this session is running.\n\n{text}")
     return 0
@@ -289,6 +327,15 @@ def post_write(p: dict) -> int:
     return 0
 
 
+def mark_automation(p: dict) -> None:
+    """A run the kit itself started (CORTEX_AUTOMATION=1): noted, so the Gardener never counts it as missed."""
+    sid = str(p.get("session_id") or "")
+    if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}", sid):
+        d = STATE_ROOT / sid
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "automation").touch()
+
+
 EVENTS = {"session-start": session_start, "prompt": prompt, "pre-compact": pre_compact,
           "stop": stop, "guard": guard, "post-write": post_write}
 
@@ -301,6 +348,10 @@ def main() -> int:
         payload = json.loads(raw) if raw.strip() else {}
     except ValueError:
         payload = {}
+    # In an automated run nobody is there to answer a log reminder or read a card. The safety guard stays on.
+    if os.environ.get("CORTEX_AUTOMATION") and sys.argv[1] != "guard":
+        mark_automation(payload)
+        return 0
     return EVENTS[sys.argv[1]](payload)
 
 
