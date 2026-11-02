@@ -11,12 +11,12 @@ Commands:
   card                  print the start card
   new TYPE --area A [--thing T] [--collection C] --title "..."
                         print the right path, id and a frontmatter skeleton
-  backup [--if-older-than-days N] [--quiet]
+  backup [--if-older-than-days N] [--if-due] [--quiet]
                         commit everything and push; log to _cortex/backup.log
   history [--days N]    the person's own typed requests + session summaries (input for Suggest)
   sort-desk             print the sorting desk
   doctor                health check in plain words
-  install-backup        weekly backup LaunchAgent (Sundays 18:00 local)
+  install-backup        weekly backup LaunchAgent (Sundays 18:00 local, or when the Mac is back)
   feedback --type T --message M [--name N --email E --org O --contact yes|no] [--dry-run]
                         submit to the maker's feedback form (the skill shows it and asks first)
   board [--open] [--port N] [--no-browser] [--stop]
@@ -841,7 +841,35 @@ def log_backup(vault: Path, msg: str) -> None:
         fh.write(f"{dt.datetime.now().strftime('%Y-%m-%d %H:%M')} {msg}\n")
 
 
+def last_weekly_due(now: float, hour: int) -> dt.datetime:
+    """The most recent Sunday at this hour on this Mac's clock."""
+    moment = dt.datetime.fromtimestamp(now)
+    sunday = moment.date() - dt.timedelta(days=(moment.weekday() + 1) % 7)
+    due = dt.datetime.combine(sunday, dt.time(hour, 0))
+    return due if due <= moment else due - dt.timedelta(days=7)
+
+
+def backup_if_due(args) -> int:
+    """launchd starts this at Sunday 18:00, on waking if the Mac slept through it, and at every login.
+    The stamp is written only after a backup that worked, so a failed push tries again at the next login."""
+    now = dt.datetime.now().timestamp()
+    stamp = HOME / ".cortex" / "backup-last-weekly"
+    try:
+        if last_weekly_due(now, 18).timestamp() <= float(stamp.read_text().strip()) <= now:   # future = wrong clock
+            return 0
+    except (OSError, ValueError):
+        pass
+    args.if_due = False
+    code = cmd_backup(args)
+    if code == 0:
+        stamp.parent.mkdir(parents=True, exist_ok=True)
+        write_atomic(stamp, str(now))
+    return code
+
+
 def cmd_backup(args) -> int:
+    if getattr(args, "if_due", False):
+        return backup_if_due(args)
     vault = vault_path(args.vault)
     if args.if_older_than_days is not None:
         lb = last_backup(vault)
@@ -956,8 +984,9 @@ PLIST = """<?xml version="1.0" encoding="UTF-8"?>
   <key>Label</key><string>com.cortex.backup</string>
   <key>ProgramArguments</key><array>
     <string>/usr/bin/python3</string><string>{script}</string>
-    <string>backup</string><string>--quiet</string><string>--vault</string><string>{vault}</string>
+    <string>backup</string><string>--if-due</string><string>--quiet</string><string>--vault</string><string>{vault}</string>
   </array>
+  <key>RunAtLoad</key><true/>
   <key>StartCalendarInterval</key><dict><key>Weekday</key><integer>0</integer>
     <key>Hour</key><integer>18</integer><key>Minute</key><integer>0</integer></dict>
   <key>StandardOutPath</key><string>{home}/.cortex/backup-agent.log</string>
@@ -984,7 +1013,8 @@ def cmd_install_backup(args) -> int:
     if r.returncode != 0:
         print(f"Weekly backup file written but could not be switched on: {r.stderr.strip()}")
         return 1
-    print("Weekly backup is on: every Sunday at 18:00 your cortex is saved and pushed to GitHub.")
+    print("Weekly backup is on: every Sunday at 18:00, or as soon as your Mac is back if it was asleep or off then, "
+          "your cortex is saved and pushed to GitHub. It does not need the Claude app open.")
     return 0
 
 
@@ -1092,7 +1122,7 @@ def main(argv=None) -> int:
     n.add_argument("--collection", default=""); n.add_argument("--title", required=True)
     n.add_argument("--slug"); n.add_argument("--date"); n.add_argument("--json", action="store_true")
     n.add_argument("--chat-id", default="")
-    b = sub.add_parser("backup"); b.add_argument("--if-older-than-days", type=int); b.add_argument("--quiet", action="store_true")
+    b = sub.add_parser("backup"); b.add_argument("--if-older-than-days", type=int); b.add_argument("--if-due", action="store_true"); b.add_argument("--quiet", action="store_true")
     h = sub.add_parser("history"); h.add_argument("--days", type=int, default=30)
     sub.add_parser("sort-desk"); sub.add_parser("doctor"); sub.add_parser("install-backup")
     f = sub.add_parser("feedback")

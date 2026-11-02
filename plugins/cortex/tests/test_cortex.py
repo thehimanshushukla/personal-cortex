@@ -4,6 +4,7 @@ Every test runs the real scripts as subprocesses with HOME pointed at a temp
 folder, so nothing touches the real ~/.cortex, ~/.claude or LaunchAgents.
 Run: python3 -m pytest plugins/cortex/tests -q
 """
+import datetime as dt
 import json
 import os
 import re
@@ -633,3 +634,42 @@ def test_chat_note_with_a_byte_order_mark_still_counts(env):
     (env["vault"] / "inbox" / "chat-x.md").write_text("\ufeffsource: chat\nstatus: proposed\nname: X\n")
     run(env, "build")
     assert "saved from chat" in (env["vault"] / "_cortex" / "card.md").read_text()
+
+
+def test_last_weekly_due_is_the_most_recent_sunday():
+    at = lambda *p: dt.datetime(*p).timestamp()  # noqa: E731
+    assert cortex.last_weekly_due(at(2026, 11, 2, 10, 0), 18) == dt.datetime(2026, 11, 1, 18, 0)
+    assert cortex.last_weekly_due(at(2026, 11, 1, 17, 59), 18) == dt.datetime(2026, 10, 25, 18, 0)
+    assert cortex.last_weekly_due(at(2026, 11, 1, 18, 0), 18) == dt.datetime(2026, 11, 1, 18, 0)
+
+
+def test_backup_plist_catches_up(env):
+    assert run(env, "install-backup").returncode == 0
+    plist = (env["home"] / "Library" / "LaunchAgents" / "com.cortex.backup.plist").read_text()
+    assert "RunAtLoad" in plist and "--if-due" in plist
+
+
+def test_backup_if_due_runs_once_and_only_records_success(env, tmp_path):
+    seed(env)
+    v = str(env["vault"])
+    remote = tmp_path / "remote.git"
+    subprocess.run(["git", "init", "-q", "--bare", str(remote)], check=True)
+    subprocess.run(["git", "-C", v, "remote", "add", "origin", str(remote)], check=True)
+    stamp = env["home"] / ".cortex" / "backup-last-weekly"
+    log = lambda: subprocess.run(["git", "-C", v, "log", "--oneline"], capture_output=True, text=True).stdout  # noqa: E731
+
+    subprocess.run(["git", "-C", v, "remote", "set-url", "origin", str(tmp_path / "gone.git")], check=True)
+    assert run(env, "backup", "--if-due", "--quiet").returncode == 1
+    assert not stamp.exists()                                    # a failed push tries again
+
+    subprocess.run(["git", "-C", v, "remote", "set-url", "origin", str(remote)], check=True)
+    assert run(env, "backup", "--if-due", "--quiet").returncode == 0
+    assert stamp.exists()
+    before = log()
+    (env["vault"] / "later.md").write_text("later")
+    assert run(env, "backup", "--if-due", "--quiet").returncode == 0
+    assert log() == before                                       # same week: nothing happens
+
+    stamp.write_text("1893456000")                               # a stamp in the future is a wrong clock
+    assert run(env, "backup", "--if-due", "--quiet").returncode == 0
+    assert log() != before

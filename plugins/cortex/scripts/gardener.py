@@ -986,10 +986,7 @@ def write_journal(vault: Path, week: str | None = None, now: float | None = None
 
 def last_due(now: float) -> dt.datetime:
     """The most recent Sunday 17:00 on this Mac's clock."""
-    moment = dt.datetime.fromtimestamp(now)
-    sunday = moment.date() - dt.timedelta(days=(moment.weekday() + 1) % 7)
-    due = dt.datetime.combine(sunday, dt.time(17, 0))
-    return due if due <= moment else due - dt.timedelta(days=7)
+    return C.last_weekly_due(now, 17)
 
 
 def run_if_due(vault: Path, now: float | None = None) -> str | None:

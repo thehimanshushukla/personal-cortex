@@ -189,7 +189,7 @@ Each is plain `python3 <script> ...`, uses the standard library only, and finds 
 | `cortex.py history --days N` | Prints the person's own typed requests from Claude Code transcripts mentioning the vault, plus session page summaries. Used as input for Suggest. |
 | `cortex.py sort-desk` | Lists inbox items and their proposals in the desk. |
 | `cortex.py doctor` | Checks Command Line Tools, git, the pointer file, the vault, the remote, the LaunchAgent and the backup age. |
-| `cortex.py install-backup` | Writes and loads `~/Library/LaunchAgents/com.cortex.backup.plist`, which runs every Sunday at 18:00 local. |
+| `cortex.py install-backup` | Writes and loads `~/Library/LaunchAgents/com.cortex.backup.plist`, which runs every Sunday at 18:00 local, on waking if the Mac slept through that time, and at login if it was off. A stamp stops a second run that week and is written only after a backup that worked. The Claude app is not involved. |
 | `cortex.py gardener [--days N] [--json]` | Which sessions were never logged. Writes only to `~/.cortex/gardener/`. Also `--journal [--week W]`, `--refresh`, `--dismiss ID`, `--undismiss ID`. |
 | `cortex.py install-gardener [--yes]` | The optional weekly Gardener run. Only on a person's yes. |
 

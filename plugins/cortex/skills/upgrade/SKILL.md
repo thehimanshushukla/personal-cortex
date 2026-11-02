@@ -53,7 +53,8 @@ If `~/.cortex/engine/migrations/` contains steps numbered above the old version,
 2. `python3 ~/.cortex/engine/scripts/cortex.py build` - fix any errors before continuing.
 3. `git -C <vault> add -- AGENTS.md kit.yaml home.md _cortex/` plus any files a migration changed, by name.
 4. `git -C <vault> commit -m "upgrade: kit X -> Y"` then `cortex.py backup`.
-5. `cortex.py doctor` and show the result.
+5. If `~/Library/LaunchAgents/com.cortex.backup.plist` exists, run `python3 ~/.cortex/engine/scripts/cortex.py install-backup` once, so the weekly backup gets the newest code. It may save and push right away. Say: "Your weekly backup now catches up if your Mac was off on Sunday."
+6. `cortex.py doctor` and show the result.
 
 ## Teaching note
 
