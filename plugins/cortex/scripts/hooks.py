@@ -19,6 +19,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from cortex import config_vault
+
 HERE = Path(__file__).resolve().parent
 STATE_ROOT = Path.home() / ".cortex" / "sessions"
 CONFIG = Path(os.environ.get("CORTEX_CONFIG", Path.home() / ".cortex" / "config.json"))
@@ -30,8 +32,7 @@ MAX_STOP_BLOCKS = 2
 
 def vault() -> Path | None:
     try:
-        v = json.loads(CONFIG.read_text()).get("vault")
-        return Path(v).expanduser().resolve() if v else None
+        return config_vault(json.loads(CONFIG.read_text(encoding="utf-8")))
     except (OSError, ValueError):
         return None
 
@@ -165,6 +166,10 @@ def session_start(p: dict) -> int:
         sd = state_dir(p)
         if not (sd / "started").exists():
             (sd / "started").write_text(dt.datetime.now().isoformat())
+    if not v and CONFIG.exists():
+        emit_context("SessionStart", f"Cortex: the settings file {CONFIG} does not name a full folder path, so no cortex was loaded. "
+                     "Tell the person once, in one line, and offer to look at it through 'set up my cortex', which shows what it finds and asks before changing anything.")
+        return 0
     if not v:
         emit_context("SessionStart", "Cortex is installed but not set up yet. Tell the person once, in one line: "
                      "\"Your cortex is installed - say 'set up my cortex' whenever you want to start.\"")
