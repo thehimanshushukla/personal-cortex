@@ -154,7 +154,7 @@ function cortexInbox() {
       const proposal = V.parseProposal(text);
       if (proposal) {
         const count = proposal.sections['Follow-ups'].length;
-        rows.push(`- ${id}: "${proposal.name}" - saved from chat ${proposal.saved}, ${count} follow-up(s). Can be accepted here.`);
+        rows.push(`- ${id}: "${proposal.name}" - saved from chat ${proposal.saved}, ${count} to-do(s) and follow-up(s). Can be accepted here.`);
       } else {
         const page = V.publicPage(`inbox/${file}`, text);
         rows.push(`- ${id}: "${get(page, 'title') || id}" - imported note. Filed from the sorting desk in the Code tab.`);
@@ -171,7 +171,7 @@ function cortexInbox() {
 
 const FOLLOWUP_FIELDS = {
   what: { type: 'string', description: 'What needs doing, in one short line.' },
-  person: { type: 'string', description: 'Who it is with, lowercase with hyphens, like alex-rivera. Leave out for your own to-do.' },
+  person: { type: 'string', description: 'Who it is with, like Alex Rivera. Leave out for the person\'s own to-do.' },
   due: { type: 'string', description: 'Due date, YYYY-MM-DD. Optional.' },
   owner: { type: 'string', enum: ['mine', 'theirs'], description: 'mine = you owe it. theirs = they owe it to you.' },
 };

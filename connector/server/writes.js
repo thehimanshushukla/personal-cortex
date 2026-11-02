@@ -72,6 +72,15 @@ function slug(value, what) {
   return value;
 }
 
+// Claude naturally writes "Priya Nair" or "@priya-nair": turn either into the slug, never fail a whole save over it.
+function personSlug(value) {
+  // Names only: a path, a line break or a task line is refused, not tidied into a slug.
+  if (typeof value !== 'string' || value.length > 70 || !/^@?[a-z0-9][a-z0-9' .-]*$/i.test(value)) {
+    throw new UserError('A follow-up needs a person\'s name in Latin letters, like Alex Rivera.');
+  }
+  return V.slugify(value.replace(/^@/, ''));
+}
+
 // One task line in the kit's grammar: - [ ] @person what (due D) (added D) {owner}
 function taskLine(item, me) {
   if (item === null || typeof item !== 'object' || Array.isArray(item)) throw new UserError('A to-do must have separate fields: what, person, due, owner.');
@@ -81,7 +90,7 @@ function taskLine(item, me) {
   const what = text(item, 'what', 300).replace(/[{}]/g, '');
   if (/\((?:due|added|done)\s+\d{4}-\d{2}-\d{2}\)/.test(what)) throw new UserError('Put the date in the "due" field, not inside "what".');
   if (item.owner !== 'mine' && item.owner !== 'theirs') throw new UserError('"owner" must be "mine" (the person owes it) or "theirs" (someone owes it to them).');
-  const person = item.person === undefined || item.person === '' ? 'me' : slug(item.person, '"person"');
+  const person = item.person === undefined || item.person === '' ? 'me' : personSlug(item.person);
   if (item.owner === 'theirs' && me.has(person)) throw new UserError('A "theirs" item needs the name of the person who owes it, like alex-rivera.');
   if (item.due !== undefined && item.due !== '' && (typeof item.due !== 'string' || !isRealDate(item.due))) {
     throw new UserError(`"due" must be a real date written YYYY-MM-DD (got ${JSON.stringify(item.due).slice(0, 40)}).`);

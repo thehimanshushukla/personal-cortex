@@ -512,8 +512,8 @@ def test_todo_line_is_in_exact_grammar_and_add_only(env, server):
 @pytest.mark.parametrize("fields, word", [
     ({"what": "x", "owner": "mine", "due": "2026-02-31"}, "real date"),
     ({"what": "x", "owner": "mine", "due": "tomorrow"}, "real date"),
-    ({"what": "x", "owner": "mine", "person": "Alex Rivera"}, "lowercase"),
-    ({"what": "x", "owner": "mine", "person": "../etc"}, "lowercase"),
+    ({"what": "x", "owner": "mine", "person": "../etc"}, "person's name"),
+    ({"what": "x", "owner": "mine", "person": "alex\nrivera"}, "person's name"),
     ({"what": "x", "owner": "somebody"}, "owner"),
     ({"what": "x", "owner": "theirs"}, "theirs"),
     ({"what": "x", "owner": "theirs", "person": "robin-vale"}, "theirs"),
@@ -682,7 +682,7 @@ def test_inbox_lists_what_is_waiting_with_ids(env, server):
     server.ok("cortex_todo_add", what="b", owner="mine")
     listing = unwrap(server.ok("cortex_inbox"))
     assert "3 waiting" in listing
-    assert f'chat-{DAY}-budget-talk: "Budget talk" - saved from chat {DAY}, 1 follow-up(s)' in listing
+    assert f'chat-{DAY}-budget-talk: "Budget talk" - saved from chat {DAY}, 1 to-do(s) and follow-up(s)' in listing
     assert 'chat-todos: "To-dos added from chat"' in listing
     assert "old-notes" in listing and "imported note" in listing
 
@@ -942,3 +942,11 @@ def test_server_uses_no_network_no_child_process_and_no_dependencies():
     required = set(re.findall(r"require\('([^']+)'\)", code))
     assert required <= {"fs", "os", "path", "./vault", "./tools", "./writes", "./card", "../manifest.json"}
     assert "fetch(" not in code and "child_process" not in code
+
+
+def test_person_given_as_a_full_name_becomes_the_slug(server):
+    server.ok("cortex_todo_add", what="send the results", person="@Priya Nair", owner="theirs")
+    server.ok("cortex_save_chat", title="Kickoff", summary="We met.",
+              followups=[{"what": "book the room", "person": "Sam O'Neil", "owner": "theirs"}])
+    waiting = unwrap(server.ok("cortex_inbox"))
+    assert "chat-todos" in waiting
