@@ -1051,7 +1051,7 @@ def test_setup_and_upgrade_never_install_the_schedule():
 def test_nothing_here_calls_a_model():
     text = (SCRIPTS / "gardener.py").read_text()
     assert "claude -p" not in text and "urllib" not in text and "socket" not in text
-    assert 'subprocess.run(["launchctl"' in text and text.count("subprocess.") == 2     # nothing else is started
+    assert 'subprocess.run(["launchctl"' in text and text.count("subprocess.") == 3     # nothing else is started
 
 
 def test_catch_up_skill_says_the_two_things_that_matter():
@@ -1724,3 +1724,21 @@ def test_rows_are_in_the_order_of_the_dates_shown(env):
     rows = report(env, "--days", "20")["missed"]
     dates = [r["date"] for r in rows]
     assert len(dates) == 2 and dates == sorted(dates, reverse=True)
+
+
+def test_gardener_can_be_switched_off(env):
+    engine = env["home"] / ".cortex" / "engine" / "scripts"
+    engine.mkdir(parents=True)
+    (engine / "cortex.py").write_text("")
+    assert run(env, "install-gardener", "--yes").returncode == 0
+    plist = env["home"] / "Library" / "LaunchAgents" / "com.cortex.gardener.plist"
+    assert plist.exists()
+    assert "is off" in run(env, "install-gardener", "--off").stdout
+    assert not plist.exists()
+    assert "is off" in run(env, "install-gardener", "--off").stdout     # twice is fine
+
+
+def test_scope_off_writes_no_journal(env):
+    (env["vault"] / "kit.yaml").write_text("gardener_scope: off\n")
+    assert G.run_if_due(env["vault"], at(2026, 11, 2, 10, 0)) is None
+    assert not (env["vault"] / "_cortex" / "journal").exists()

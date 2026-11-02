@@ -28,6 +28,8 @@ def main() -> None:
     bundle = DIST / f"cortex-chat-{version}.mcpb"
     with zipfile.ZipFile(bundle, "w") as z:
         add(z, HERE / "manifest.json", "manifest.json")
+        add(z, HERE.parent / "LICENSE", "LICENSE")
+        add(z, HERE.parent / "NOTICE", "NOTICE")
         for name in SERVER_FILES:
             add(z, HERE / "server" / name, f"server/{name}")
         for name in TEMPLATE_FILES:

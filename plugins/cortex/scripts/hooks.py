@@ -137,7 +137,7 @@ def gardener_line(v: Path) -> str:
     info = gardener_summary(v)
     now = dt.datetime.now().timestamp()
     at, week, ids, oldest = info.get("at"), info.get("week"), info.get("week_ids"), info.get("risk_oldest")
-    if not isinstance(at, (int, float)) or now - at > GARDENER_STALE:
+    if not isinstance(at, (int, float)) or not 0 <= now - at <= GARDENER_STALE:
         try:
             subprocess.Popen([sys.executable, str(HERE / "cortex.py"), "--vault", str(v), "gardener", "--refresh", "--quiet"],
                              stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
@@ -167,16 +167,17 @@ def gardener_line(v: Path) -> str:
 
 
 
-def refresh_card(v: Path, card: Path) -> bool:
+def refresh_card(v: Path, card: Path) -> str:
     """The Chat tab writes pages but cannot build, so the card can be missing or older than the pages.
-    Rebuild then, but only in a folder that already holds a cortex: a build writes home.md and _cortex/.
-    False when a needed rebuild did not finish, so the person is told the card may be old."""
-    if not (v / "kit.yaml").exists() and not (v / "_cortex").exists():
-        return True
+    Rebuild then, but only in a folder with a kit.yaml: a build writes home.md and _cortex/.
+    Says 'ok', 'failed', or 'running' for a big cortex that is still building when the wait ends."""
+    if not (v / "kit.yaml").exists():
+        return "ok"
     try:
         built = card.stat().st_mtime if card.exists() else 0
     except OSError:
-        return True
+        return "ok"
+    now = dt.datetime.now().timestamp()
     stale = not built
     for root, dirs, files in os.walk(v):
         if stale:
@@ -186,19 +187,22 @@ def refresh_card(v: Path, card: Path) -> bool:
             if not f.endswith(".md") or (f == "home.md" and Path(root) == v):
                 continue
             try:
-                if os.lstat(os.path.join(root, f)).st_mtime > built:
+                if built < os.lstat(os.path.join(root, f)).st_mtime <= now:   # a future date would rebuild every time
                     stale = True
                     break
             except OSError:
                 continue      # one bad path must not stop the check for the rest
     if not stale:
-        return True
+        return "ok"
     try:
         script = str(Path(__file__).resolve().parent / "cortex.py")
-        return subprocess.run([sys.executable, script, "--vault", str(v), "build"],
-                              capture_output=True, timeout=10).returncode == 0
-    except (OSError, subprocess.SubprocessError):
-        return False
+        build = subprocess.Popen([sys.executable, script, "--vault", str(v), "build"], stdin=subprocess.DEVNULL,
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        return "ok" if build.wait(timeout=8) == 0 else "failed"
+    except subprocess.TimeoutExpired:
+        return "running"      # it carries on by itself, and the next session has the new card
+    except OSError:
+        return "failed"
 
 
 def session_start(p: dict) -> int:
@@ -223,10 +227,13 @@ def session_start(p: dict) -> int:
         emit_context("SessionStart", f"Cortex: the cortex folder {v} is missing. Suggest 'cortex doctor' via the guide skill.")
         return 0
     card = v / "_cortex" / "card.md"
-    fresh = refresh_card(v, card)
+    build = refresh_card(v, card)
     text = card.read_text() if card.exists() else "Cortex card not built yet."
-    if not fresh:
-        text += "\nThis card may be out of date: rebuilding it did not finish. Offer once: \"say 'is everything ok' to see why\".\n"
+    if build == "failed":
+        text += ("\nThis card may be out of date: the build stopped on a problem in your pages. Offer once: "
+                 "\"say 'is everything ok' to see it\".\n")
+    elif build == "running":
+        text += "\nThis card may be out of date: a new one is still being built, and the next session will have it.\n"
     unsaved = unsaved_pages(v)
     unpushed = unpushed_commits(v)
     if unsaved:

@@ -1,6 +1,6 @@
 ---
 name: sort
-description: Review the sorting desk and file imported notes into the right area, project and page type, with links, only after the person confirms. Use when the person says "open the sorting desk", "file my imports", "sort my inbox", "where should these notes go", "accept all", "accept all except 3", "move 4 to <place>", or "make 5 a decision".
+description: Review the sorting desk and file imported notes into the right area, project and page type, with links, only after the person confirms. Use when the person says "open the sorting desk", "file my imports", "sort my inbox", "where should these notes go", "accept all", "accept all except 3", "move 4 to <place>", or "make 5 a decision". Also when the person says "what is in my inbox".
 ---
 
 # Sorting desk
@@ -15,7 +15,9 @@ Run `cortex sort-desk`. It prints the import proposals from `_cortex/sorting-des
 
 If there are loose notes, list them after the proposals. For each: if it is empty, offer to archive it (move it to `inbox/` with a header and `status: archived`, never delete); otherwise propose a home and a page type exactly as for imports, and give it a proper header with `cortex new` on the person's yes.
 
-If there are no proposals and no loose notes, say so, and offer the import skill.
+A note in `inbox/` whose top lines include `source: chat` and `status: proposed` was saved from the Chat tab. List these by their `name:` line. Ask which area each belongs in. To file one, use the Cortex extension's `cortex_accept` tool if you have it. If not, make a session page with `cortex new`, copy the note's sections into it after a yes, and move the note to `sources/<yyyy-mm>/`. Never delete it. Lines marked `{private}` stay marked.
+
+If there are no proposals, no loose notes and nothing saved from chat, say so, and offer the import skill.
 
 Show the rows grouped by proposed area. Inside each area, put **low confidence first**, then medium, then high, so the person looks hardest at the uncertain ones. Keep each row to one line:
 

@@ -23,7 +23,7 @@ Commands:
                         the board and inbox page on this Mac only (scripts/board.py); --stop closes it
   gardener [--days N] [--json] [--journal [--week YYYY-Www]] [--dismiss ID] [--undismiss ID]
                         which sessions were never logged, from local transcripts, no AI (scripts/gardener.py)
-  install-gardener [--yes]
+  install-gardener [--yes | --off]
                         the weekly Gardener run; only on a person's yes, never from setup or upgrade
 """
 from __future__ import annotations
@@ -627,7 +627,7 @@ def render_card(pages: list[Page], items: list[dict], vault: Path) -> str:
     if inbox:
         from_chat = sum(1 for f in inbox if chat_proposal_name(f) is not None)
         if from_chat:
-            lines += [f"Inbox: {len(inbox)} note(s) waiting, {from_chat} saved from chat. Say 'open the sorting desk'.", ""]
+            lines += [f"Inbox: {len(inbox)} note(s) waiting, {from_chat} saved from chat. Say 'what is in my inbox'.", ""]
         else:
             lines += [f"Sorting desk: {len(inbox)} imported note(s) waiting. Say 'open the sorting desk'.", ""]
     loose = loose_notes(vault)
@@ -1136,7 +1136,7 @@ def main(argv=None) -> int:
     g.add_argument("--journal", action="store_true"); g.add_argument("--week"); g.add_argument("--refresh", action="store_true")
     g.add_argument("--if-due", action="store_true")
     g.add_argument("--quiet", action="store_true"); g.add_argument("--dismiss"); g.add_argument("--undismiss")
-    ig = sub.add_parser("install-gardener"); ig.add_argument("--yes", action="store_true")
+    ig = sub.add_parser("install-gardener"); ig.add_argument("--yes", action="store_true"); ig.add_argument("--off", action="store_true")
     # --vault is accepted after the subcommand too (the LaunchAgent passes it that way)
     argv = list(sys.argv[1:] if argv is None else argv)
     if "--vault" in argv[1:]:

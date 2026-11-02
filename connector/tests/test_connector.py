@@ -167,8 +167,6 @@ def chat_wording(card):
     card = re.sub(r"(\d+) overdue - say 'show my board' to open them\.", r"\1 overdue.", card)
     card = re.sub(r"Sorting desk: (\d+) imported note\(s\) waiting\. Say 'open the sorting desk'\.",
                   r"Inbox: \1 note(s) waiting. Say 'what is in my inbox'.", card)
-    card = re.sub(r"(Inbox: \d+ note\(s\) waiting, \d+ saved from chat\.) Say 'open the sorting desk'\.",
-                  r"\1 Say 'what is in my inbox'.", card)
     card = card.replace("with no header. Say 'open the sorting desk'.", "with no header.")
     card = card.replace(" Say 'what is on my list' for all of them.", "")
     card = card.replace(" Say 'what did I promise whom' for the full list.", "")
@@ -932,7 +930,7 @@ def test_build_makes_a_working_bundle_with_only_the_needed_files(tmp_path):
         z.extractall(tmp_path / "unpacked")
     assert "manifest.json" in names and "server/index.js" in names and "server/templates/kit.yaml" in names
     assert not [n for n in names if n.startswith(("tests", "dist", "skill")) or n.endswith((".py", "README.md"))]
-    assert names == {"manifest.json"} | {f"server/{p.name}" for p in (CONNECTOR / "server").glob("*.js")} \
+    assert names == {"manifest.json", "LICENSE", "NOTICE"} | {f"server/{p.name}" for p in (CONNECTOR / "server").glob("*.js")} \
         | {f"server/templates/{p.name}" for p in (CONNECTOR / "server" / "templates").iterdir() if not p.name.startswith(".")}
     # the unpacked copy really runs
     home = tmp_path / "home"
@@ -1421,6 +1419,8 @@ def test_an_area_listed_on_the_card_can_be_named_when_filing(env, server):
 def test_build_packs_only_the_named_files(tmp_path):
     copy = tmp_path / "connector"
     shutil.copytree(CONNECTOR, copy, ignore=shutil.ignore_patterns("dist", "tests", "__pycache__"))
+    for legal in ("LICENSE", "NOTICE"):
+        shutil.copy(CONNECTOR.parent / legal, tmp_path / legal)
     for stray in ("server/templates/.DS_Store", "server/.hidden.js", "server/templates/notes.txt", "server/extra.js"):
         (copy / stray).write_text("stray")
     r = subprocess.run([sys.executable, str(copy / "build.py")], capture_output=True, text=True)
@@ -1831,8 +1831,8 @@ def test_a_lock_dated_in_the_future_is_stale(env, server):
 # Item 8: the docs say what is true
 def test_readme_is_honest_about_the_card_test_and_the_private_rule():
     readme = (CONNECTOR / "README.md").read_text()
-    row = next(line for line in readme.splitlines() if "20 of 20" in line)
-    assert "changed since" in row and "measured again" in row and "morning tests" in row.lower()
+    row = next(line for line in readme.splitlines() if "25 of 25" in line)
+    assert "one account" in row and "usually" in row
     part = readme[readme.index("## What counts as private"):readme.index("## How saving stays safe")]
     for words in ("`## Private equity deals`", "`##Private`", "`- ## Private`", "`<pre>`", "unindented", "What is guaranteed", "1 private item not shown"):
         assert words in part, words

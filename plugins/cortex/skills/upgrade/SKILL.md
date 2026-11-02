@@ -20,11 +20,12 @@ Explain and guide them, one step at a time:
 - Installed kit version: read `~/.cortex/engine/.claude-plugin/plugin.json` -> `version`.
 - Vault version: `kit_version` in the vault `kit.yaml` (vault path from `~/.cortex/config.json`).
 - Same version: "You are already on the latest version (X)." Stop.
+- Vault newer than the kit: "Your cortex is on X, newer than the kit (Y). Update the plugin first." Stop, and change nothing.
 - Show: "Your cortex is on X; the kit is now Y." If `~/.cortex/engine/docs/CHANGELOG.md` exists, show the entries between X and Y in plain words.
 
 ## 3. Back up first
 
-Run `python3 ~/.cortex/engine/scripts/cortex.py backup` so the current state is saved before anything changes. If it fails, stop and say why; do not upgrade without a saved copy.
+Run `python3 ~/.cortex/engine/scripts/cortex.py backup` so the current state is saved before anything changes. If it fails, stop and say why; do not upgrade without a saved copy. The one exception is a cortex with no backup set up (it says "not a git repository"): tell the person, copy the whole folder to `<vault>-before-<Y>`, say where the copy is, and carry on. Skip every `git` command below, and tell them "say 'set up my cortex' to add backup".
 
 ## 3b. One-time move to AGENTS.md (vaults set up before 0.3.0)
 

@@ -3,8 +3,7 @@
 Planned updates, in rough order. Tell us what you want first: say "send feedback".
 
 ## Next
-- **The Gardener, next parts:** the first part (built, not yet released) finds sessions that were never logged. Next it proposes the decisions, people and to-dos those sessions left out, each with a quoted source, for your yes. Then a tidy-up of stale pages and duplicates, and bringing in a Claude account export.
-- **Cortex in the Chat tab (built, not yet released):** a small extension for the Claude desktop app that reads your Cortex and saves to it from Chat, desktop only. It is waiting on checks in the real app. See `connector/` in the repository.
+- **The Gardener, next parts:** the first part (0.5.0) finds sessions that were never logged. Next it proposes the decisions, people and to-dos those sessions left out, each with a quoted source, for your yes. Then a tidy-up of stale pages and duplicates, and bringing in a Claude account export.
 - **More coding tools:** Cursor, Gemini CLI and GitHub Copilot adapters (Codex works from 0.3.0).
 - **Reviewer agent:** a second opinion on an important document before it goes out, from an agent that did not write it, with a record of your rulings.
 - **Morning brief:** a short daily brief of what is due, what is waiting on others, and what has gone quiet. (The board it builds on shipped in 0.4.0: say "show my board".)

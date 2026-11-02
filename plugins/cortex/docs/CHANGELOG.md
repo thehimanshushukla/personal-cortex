@@ -1,7 +1,7 @@
 # Changelog
 
-## Unreleased
-Built but not released yet: the Gardener and the Chat tab extension.
+## 0.5.0
+The Gardener's first part and Cortex in the Chat tab. To update: "Run claude plugin update cortex@personal-cortex for me", then in a new session "update my cortex".
 
 The Gardener, first part: it finds working sessions that never reached your cortex. No AI, and nothing is sent anywhere.
 - `cortex.py gardener` lists Claude Code and Codex sessions on this Mac that were never logged, with date, folder, message count and the first request as a short title. It prints no other chat text.
@@ -17,11 +17,17 @@ The Gardener, first part: it finds working sessions that never reached your cort
 - `cortex.py new --date` now sets `created` to that date, so a caught-up session counts in the week it started.
 - `gardener_scope` in `kit.yaml`: `cortex` (default: your cortex folder, and sessions that mention or touched it), `all`, or `off`.
 - A plain Claude Chat cannot be seen, because it is not on your Mac. Use "save this chat" there.
-- Nothing runs on a timer. `cortex.py install-gardener --yes` adds a weekly run, only if you ask for it.
+- Nothing runs on a timer unless you say yes. `cortex.py install-gardener --yes` adds a weekly run, Sunday at 17:00, and it catches up when your Mac is back if it was asleep or off. It does not need the Claude app open. `--off` stops it.
 
-Cortex in the Chat tab: a separate small extension for the Claude desktop app, in `connector/` in the kit's repository. It waits on checks in the real app.
+Cortex in the Chat tab: a separate small extension for the Claude desktop app. Download it from the GitHub release and double-click it. Checked in the real app on one Mac; Windows is untested.
 - It shows your card, searches and opens your pages, adds to-dos, saves a chat to `inbox/` as a proposal, and files a saved chat when you accept it.
 - Desktop app only. Private parts of a page stay out of every chat tool. See `connector/README.md`.
+
+Other changes:
+- The weekly backup catches up too, when your Mac was asleep or off on Sunday. "Update my cortex" switches this on if you have the weekly backup, and it may save and push right away.
+- A new session rebuilds the start card when pages have changed outside a session, such as a chat you filed.
+- A cortex with no backup set up can now be updated: it makes a copy of the folder first.
+- Very long lines no longer slow a build, and more private headings are recognised.
 
 ## 0.4.1
 "Update my cortex" now offers to update the plugin for you. The Update button in the app's Plugins screen did not fetch a new version in testing.

@@ -554,6 +554,7 @@ def test_a_bracketed_name_in_settings_does_not_stop_the_build(tmp_path):
 def test_start_hook_rebuilds_a_card_older_than_the_pages(env):
     """The Chat tab writes pages but cannot build: a new session must still see them."""
     seed(env)
+    (env["vault"] / "kit.yaml").write_text("name: Robin Vale\n")
     run(env, "build")
     card = env["vault"] / "_cortex" / "card.md"
     old = card.stat().st_mtime - 100
@@ -567,6 +568,7 @@ def test_start_hook_rebuilds_a_card_older_than_the_pages(env):
 
 def test_start_hook_builds_a_missing_card(env):
     seed(env)
+    (env["vault"] / "kit.yaml").write_text("name: Robin Vale\n")
     run(env, "build")
     (env["vault"] / "_cortex" / "card.md").unlink()
     assert "not built yet" not in hook(env, "session-start", {"session_id": "missing"}).stdout
@@ -598,6 +600,7 @@ def test_start_hook_never_builds_in_a_folder_with_no_cortex(env, files):
 def test_a_broken_link_is_not_silent(env):
     """The build refuses a broken .md link, so the person must be told, not shown an old card as if current."""
     seed(env)
+    (env["vault"] / "kit.yaml").write_text("name: Robin Vale\n")
     run(env, "build")
     (env["vault"] / "aaa-link.md").symlink_to(env["vault"] / "missing-target")
     assert "may be out of date" in hook(env, "session-start", {"session_id": "link"}).stdout
@@ -605,6 +608,7 @@ def test_a_broken_link_is_not_silent(env):
 
 def test_a_failed_rebuild_says_the_card_may_be_old(env):
     seed(env)
+    (env["vault"] / "kit.yaml").write_text("name: Robin Vale\n")
     run(env, "build")
     card = env["vault"] / "_cortex" / "card.md"
     old = card.stat().st_mtime - 100
@@ -617,6 +621,7 @@ def test_a_failed_rebuild_says_the_card_may_be_old(env):
 
 def test_a_nested_home_page_counts_as_a_change(env):
     seed(env)
+    (env["vault"] / "kit.yaml").write_text("name: Robin Vale\n")
     run(env, "build")
     card = env["vault"] / "_cortex" / "card.md"
     old = card.stat().st_mtime - 100
@@ -673,3 +678,36 @@ def test_backup_if_due_runs_once_and_only_records_success(env, tmp_path):
     stamp.write_text("1893456000")                               # a stamp in the future is a wrong clock
     assert run(env, "backup", "--if-due", "--quiet").returncode == 0
     assert log() != before
+
+
+def test_a_folder_with_only_cortex_output_and_own_home_is_not_rebuilt(env):
+    v = env["vault"]
+    (v / "kit.yaml").unlink(missing_ok=True)
+    (v / "_cortex").mkdir(exist_ok=True)
+    (v / "home.md").write_text("MY HOME")
+    hook(env, "session-start", {"session_id": "gate"})
+    assert (v / "home.md").read_text() == "MY HOME"
+
+
+def test_future_dated_page_does_not_rebuild_every_time(env):
+    seed(env)
+    (env["vault"] / "kit.yaml").write_text("name: Robin Vale\n")
+    run(env, "build")
+    card = env["vault"] / "_cortex" / "card.md"
+    page = next(p for p in env["vault"].rglob("*.md") if "_cortex" not in p.parts and p.name != "home.md")
+    future = time.time() + 86400 * 365
+    os.utime(page, (future, future))
+    hook(env, "session-start", {"session_id": "f1"})
+    before = card.stat().st_mtime
+    hook(env, "session-start", {"session_id": "f2"})
+    assert card.stat().st_mtime == before
+
+
+def test_card_points_chat_notes_at_the_inbox_and_the_sort_skill_knows_them(env):
+    seed(env)
+    (env["vault"] / "inbox").mkdir(exist_ok=True)
+    (env["vault"] / "inbox" / "chat-x.md").write_text("source: chat\nstatus: proposed\nname: X\n")
+    run(env, "build")
+    assert "Say 'what is in my inbox'" in (env["vault"] / "_cortex" / "card.md").read_text()
+    skill = (CORTEX.parent.parent / "skills" / "sort" / "SKILL.md").read_text()
+    assert "source: chat" in skill and "what is in my inbox" in skill.split("---")[1]

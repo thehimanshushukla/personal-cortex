@@ -1,6 +1,6 @@
 # Cortex in the Chat tab
 
-Not yet released. This is a small extension for the Claude desktop app. It lets the Chat tab read your Cortex and save to it. Your Cortex stays in a folder on your computer, and the extension makes no internet calls of its own. What Claude reads from it in a chat becomes part of that chat, like anything else you type there.
+This is a small extension for the Claude desktop app. It lets the Chat tab read your Cortex and save to it. Your Cortex stays in a folder on your computer, and the extension makes no internet calls of its own. What Claude reads from it in a chat becomes part of that chat, like anything else you type there.
 
 ## What you can do
 
@@ -16,12 +16,12 @@ Inside a Claude Project set up as below:
 
 ## Install
 
-1. Get the file `cortex-chat-0.1.0.mcpb`.
+1. Download `cortex-chat-0.1.0.mcpb` from the [latest GitHub release](https://github.com/thehimanshushukla/personal-cortex/releases/latest).
 2. Double-click the file. The Claude desktop app opens and shows the install screen.
-3. Click **Install**.
+3. Click **Install**, then confirm. The app warns that an extension gets access to everything on your computer and that its developer is not verified by Anthropic. That is what this app shows for any extension installed by hand.
 4. Leave the Cortex folder as it is, unless your Cortex lives somewhere else. If you already use the Cortex plugin, the extension finds your folder by itself.
 
-An earlier test version installed with no warning. If you do see a note that the file is unsigned, that is expected for a file installed by hand. These steps are checked in the real app by [MORNING-TESTS.md](MORNING-TESTS.md).
+To change the folder later, open **Settings**, **Customize**, **Connectors**, **Cortex**, click **Browse** and **Save**, then quit and reopen the Claude app. Chats keep the old folder until you do. To remove the extension, click **Uninstall** on the same page.
 
 ## Which folder it uses
 
@@ -37,7 +37,7 @@ Your card has a line saying which folder is in use and why. Setup says it too.
 
 ## The permission prompts
 
-In the earlier test version, Claude asked before every tool, the first time and each time after, including tools that only read. For each one you could allow it once or always. Step 10 of the morning tests checks this version.
+Claude asks before every tool, the first time and each time after, including tools that only read. For each one you can allow it once or always, and you can set this on the Cortex page in the app.
 
 - **Safe to always allow:** Show my Cortex card, Search my Cortex, Open a Cortex page, What is in my inbox. They only read.
 - **Keep asking for the rest:** Add a to-do, Save this chat, File a saved chat, Set up a new Cortex. That prompt is your chance to see what is being written.
@@ -59,8 +59,8 @@ Optional: upload `cortex-chat-skill.zip` as a skill, so phrases like "save this 
 |---|---|
 | Claude desktop app, Chat tab | Works |
 | Claude on the web or on your phone | Does not work. The extension runs on your computer. |
-| A chat inside the Project | Reads your card first: 20 of 20 test chats, on one account and one model, so read this as "usually", not "always". The instruction wording has changed since that test, so the result must be measured again: step 8 of the [morning tests](MORNING-TESTS.md). |
-| A chat outside the Project | Should work when you ask for Cortex by name. Nothing tells it to read your card by itself. Step 11 of the morning tests checks this. |
+| A chat inside the Project | Reads your card first: 25 of 25 test chats, on one account and one model, so read this as "usually", not "always". |
+| A chat outside the Project | Works when you ask for Cortex by name, and for plain requests such as "add to my list". Nothing tells it to read your card by itself, and a general question such as "what is on my plate" may go to your other connectors instead. |
 | Saving | Happens when you ask, or when Claude offers and you say yes. There is no save when a chat ends, so a chat you never saved is not in your Cortex. |
 | Old chats | This extension cannot read them. |
 | Your board | Saved items reach it after you file them. The board itself opens from the Code tab, not from chat. |
@@ -70,7 +70,7 @@ Optional: upload `cortex-chat-skill.zip` as a skill, so phrases like "save this 
 | Backup | Not done by this extension. If you set up from chat, your pages exist only on this computer until you add backup: open the Code tab, install the Cortex plugin and say "set up my cortex". It finds your folder and only offers backup. It needs a free GitHub account. |
 | Updates | Do not arrive by themselves. Install the new file the same way. |
 | Windows | Built to work, but not tested. |
-| Mac | An earlier test version worked in the real app. This version passes its automated tests; the checks only the real app can do are in [MORNING-TESTS.md](MORNING-TESTS.md). |
+| Mac | Checked in the real app, on one Mac. |
 
 ## What counts as private
 

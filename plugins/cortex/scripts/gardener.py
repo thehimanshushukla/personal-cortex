@@ -72,7 +72,7 @@ CODEX_TYPES = {"session_meta", "turn_context", "event_msg", "response_item", "co
 # Lines in a file with none of these and a type of their own are bookkeeping, not a format we cannot read.
 TALK_KEYS = {"message", "content", "payload", "text", "role"}
 CHAT_NOTE = ("A plain Claude Chat cannot be seen here, because its conversations are not on this Mac. "
-             "To keep one, say 'save this chat' in that chat (it needs the Cortex extension for the Chat tab).")
+             "To keep one, say 'save this chat' in that chat (it needs the Cortex extension for the Chat tab, from the kit's latest GitHub release).")
 
 
 def home() -> Path:
@@ -993,6 +993,8 @@ def run_if_due(vault: Path, now: float | None = None) -> str | None:
     """launchd starts this at Sunday 17:00, on waking if the Mac slept through it, and at every login.
     So a Mac that was off still gets its run when it comes back, and a login in the same week does
     nothing. The journal is for the week that ended on the missed Sunday, not the week it runs in."""
+    if scope_of(vault) == "off":
+        return None
     now = time.time() if now is None else now
     due = last_due(now)
     stamp = state_dir() / "last-weekly-run"
@@ -1028,6 +1030,13 @@ PLIST = """<?xml version="1.0" encoding="UTF-8"?>
 
 def install_schedule(args) -> int:
     """Setup and upgrade never call this: it runs only when a person has said yes to a weekly run."""
+    plist = home() / "Library" / "LaunchAgents" / "com.cortex.gardener.plist"
+    if args.off:
+        if not os.environ.get("CORTEX_NO_LAUNCHD"):
+            subprocess.run(["launchctl", "bootout", f"gui/{os.getuid()}", str(plist)], capture_output=True)
+        plist.unlink(missing_ok=True)
+        print("The weekly Gardener is off. The start card and 'catch up' still work.")
+        return 0
     if not args.yes:
         print("This would run the Gardener every Sunday at 17:00, or as soon as your Mac is back if it was asleep "
               "or off then. It counts your sessions and writes the weekly journal. It does not need the Claude app open. "
@@ -1039,7 +1048,6 @@ def install_schedule(args) -> int:
         print("Start a session in your coding tool once, then try again: the kit's stable copy is not there yet.")
         return 1
     state_dir()
-    plist = home() / "Library" / "LaunchAgents" / "com.cortex.gardener.plist"
     plist.parent.mkdir(parents=True, exist_ok=True)
     plist.write_text(PLIST.format(script=escape(str(script)), vault=escape(str(vault)), home=escape(str(home()))))
     if os.environ.get("CORTEX_NO_LAUNCHD"):

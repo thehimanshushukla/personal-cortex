@@ -147,7 +147,7 @@ The board (`cortex.py board`) shows these lines as cards. A move edits only that
 
 The build collects every open follow-up into `_cortex/followups.md`.
 
-## The chat lane (`connector/`, not yet released)
+## The chat lane (`connector/`)
 
 A separate Node extension for the desktop app's Chat tab. It needs no Python. These rules add to the contract:
 
