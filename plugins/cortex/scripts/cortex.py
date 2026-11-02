@@ -56,10 +56,62 @@ DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 # A task line: - [ ] @person what (due D) (added D) (done D) {mine|theirs} {doing}
 # The dated parts are optional and in any order; {doing} is optional and comes last (0.4.0).
-FOLLOWUP_RE = re.compile(
-    r"^(?P<indent>\s*)-\s\[(?P<done>[ xX])\]\s+@(?P<person>[a-z0-9-]+)\s+(?P<text>.*?)"
-    r"(?P<meta>(?:\s*\((?:due|added|done)\s+\d{4}-\d{2}-\d{2}\))*)"
-    r"\s*\{(?P<owner>mine|theirs)\}(?:\s*\{(?P<doing>doing)\})?(?P<trail>\s*)$")
+MAX_TASK_LINE = 4000  # a longer line is never a task line
+_TASK_HEAD_RE = re.compile(r"^(?P<indent>\s*)-\s\[(?P<done>[ xX])\]\s+@(?P<person>[a-z0-9-]+)\s+(?=\S)")
+_ONE_META_RE = re.compile(r"\((?:due|added|done)\s+\d{4}-\d{2}-\d{2}\)")
+
+
+class _TaskMatch:
+    def __init__(self, text_end, **groups):
+        self.text_end, self.groups_by_name = text_end, groups
+
+    def group(self, name):
+        return self.groups_by_name[name]
+
+    def end(self, name):
+        if name != "text":
+            raise ValueError(name)
+        return self.text_end
+
+
+class _TaskPattern:
+    """What one big pattern used to do, reading the ends of the line by hand: as a pattern, a line
+    with thousands of spaces took minutes. Keep in step with matchTask in connector/server/vault.js."""
+
+    @staticmethod
+    def match(line: str):
+        if len(line) > MAX_TASK_LINE:
+            return None
+        head = _TASK_HEAD_RE.match(line)
+        if not head:
+            return None
+        after = line[head.end():]
+        rest = after.rstrip()
+        if "\n" in rest:
+            return None
+        trail, doing = after[len(rest):], None
+        if rest.endswith("{doing}"):
+            inner = rest[:-7].rstrip()
+            if inner.endswith(("{mine}", "{theirs}")):
+                rest, doing = inner, "doing"
+        owner = "mine" if rest.endswith("{mine}") else "theirs" if rest.endswith("{theirs}") else None
+        if not owner:
+            return None
+        rest = rest[:-(len(owner) + 2)]
+        end = len(rest)
+        while True:
+            trimmed = rest[:end].rstrip()
+            at = trimmed.rfind("(")
+            if at == -1 or not _ONE_META_RE.fullmatch(trimmed, at):
+                break
+            end = at
+        text = rest[:end].rstrip()
+        return _TaskMatch(head.end() + len(text), indent=head.group("indent"), done=head.group("done"),
+                          person=head.group("person"), text=text, meta=rest[len(text):].rstrip(), owner=owner,
+                          doing=doing, trail=trail)
+
+
+FOLLOWUP_RE = _TaskPattern()
 META_RE = re.compile(r"\((due|added|done)\s+(\d{4}-\d{2}-\d{2})\)")
 
 
@@ -233,7 +285,7 @@ def validate(pages: list[Page], vault: Path, people: set[str]) -> tuple[list[str
     me = self_slugs(vault)
     headerless_people = {Path(rel).stem for rel in loose_notes(vault) if rel.startswith("people/")}
     errors, warnings = [], []
-    all_ids = {p.get("id") for p in pages if p.get("id")}
+    all_ids = {str(p.get("id")) for p in pages if p.get("id")}
     seen: dict[str, str] = {}
     for p in pages:
         pe = list(p.errors)
@@ -270,7 +322,7 @@ def validate(pages: list[Page], vault: Path, people: set[str]) -> tuple[list[str
                 exp = expected_id(p)
                 if exp and m.get("id") and m["id"] != exp:
                     pe.append(f"id should be '{exp}' (it is '{m['id']}')")
-            pid = m.get("id")
+            pid = str(m["id"]) if m.get("id") else ""
             if pid:
                 if pid in seen:
                     pe.append(f"id '{pid}' is also used by {seen[pid]}")
@@ -300,7 +352,7 @@ def validate(pages: list[Page], vault: Path, people: set[str]) -> tuple[list[str
                 warnings.append(f"{p.rel}: {note}")
         for e in pe:
             errors.append(f"{p.rel}: {e}")
-    by_id = {p.get("id"): p for p in pages if p.get("id")}
+    by_id = {str(p.get("id")): p for p in pages if p.get("id")}
     for p in pages:
         for link in p.get("links", []) if isinstance(p.get("links"), list) else []:
             other = by_id.get(link)
@@ -468,6 +520,8 @@ def render_card(pages: list[Page], items: list[dict], vault: Path) -> str:
     now = dt.date.today()
     cfg = parse_kit(vault)
     name = cfg.get("name", "")
+    if isinstance(name, list):  # a name like [Rob] [Vale] reads as a list
+        name = ", ".join(name)
     lines = [f"# Cortex card{' - ' + name if name else ''}", "", f"As of {now.isoformat()}.", ""]
     areas = [p for p in pages if p.get("type") == "area"]
     if areas:

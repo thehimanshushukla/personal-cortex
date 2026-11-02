@@ -6,8 +6,10 @@ Run: python3 -m pytest plugins/cortex/tests -q
 """
 import json
 import os
+import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -15,6 +17,9 @@ import pytest
 SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
 CORTEX = SCRIPTS / "cortex.py"
 HOOKS = SCRIPTS / "hooks.py"
+sys.path.insert(0, str(SCRIPTS))
+import cortex  # noqa: E402
+
 TODAY = subprocess.run(["date", "+%F"], capture_output=True, text=True).stdout.strip()
 
 
@@ -501,3 +506,45 @@ def test_comment_first_in_header_is_still_a_page(env):
     p.write_text(p.read_text().replace("---\n", "---\n# my comment\n", 1))
     assert run(env, "build").returncode == 0
     assert s["id"] in (env["vault"] / "_cortex/index.md").read_text()
+
+
+# ---------------------------------------------------------------- task lines cannot hang the build
+
+OLD_FOLLOWUP_RE = re.compile(
+    r"^(?P<indent>\s*)-\s\[(?P<done>[ xX])\]\s+@(?P<person>[a-z0-9-]+)\s+(?P<text>.*?)"
+    r"(?P<meta>(?:\s*\((?:due|added|done)\s+\d{4}-\d{2}-\d{2}\))*)"
+    r"\s*\{(?P<owner>mine|theirs)\}(?:\s*\{(?P<doing>doing)\})?(?P<trail>\s*)$")
+
+
+@pytest.mark.parametrize("line", [
+    "- [ ] @alex-rivera send roadmap (due 2020-01-01) {theirs}", "- [x] @a old {mine}", "  - [ ] @me book the room {mine}  ",
+    "\t- [X] @me x (done 2026-01-01) (added 2026-01-01) {mine} {doing}", "- [ ] @me x (due 2026-01-01) later {mine}",
+    "- [ ] @me check (due 2026-01-01){mine}{doing}\t", "- [ ] @me {mine}", "- [ ] @me (due 2026-01-01) {mine}", "- [ ] @me  two  spaces  {theirs}",
+    "- [ ] @me x {doing}", "- [ ] @me x {doing} {mine}", "- [ ] @me x {mine} {mine}", "- [ ] @me x {mine} y", "- [ ] @me x", "- [ ] @Me x {mine}",
+    "-  [ ] @me x {mine}", "- [] @me x {mine}", "- [ ] me x {mine}", "- [ ] @me{mine}", "- [ ] @me x (due 2026-1-1) {mine}", "- [ ] @me (x) (due  2026-01-01)  (added 2026-01-02) {mine}",
+    "- [ ] @me a (b (due 2026-01-01) {theirs} {doing}  ", "text", "", "- [ ] @me x\u00a0(due 2026-01-01)\u2003{mine}\u00a0",
+])
+def test_task_lines_read_the_same_as_the_old_pattern(line):
+    old, new = OLD_FOLLOWUP_RE.match(line), cortex.FOLLOWUP_RE.match(line)
+    assert bool(old) == bool(new), line
+    if old:
+        for name in ("indent", "done", "person", "text", "meta", "owner", "doing", "trail"):
+            assert old.group(name) == new.group(name), (line, name)
+        assert old.end("text") == new.end("text"), line
+        assert cortex.META_RE.findall(old.group("meta")) == cortex.META_RE.findall(new.group("meta"))
+
+
+@pytest.mark.parametrize("line", ["- [ ] @a " + " " * 60000, "- [ ] @a x" + " " * 60000 + "y {mine}", "- [ ] @a x" + " " * 3000 + "y {mine}",
+                                  "- [ ] @a " + "(due 2026-01-01) " * 200 + " x" + " " * 1000 + "{mine}"])
+def test_a_line_of_spaces_cannot_hang_parsing(line):
+    start = time.monotonic()
+    for _ in range(50):
+        cortex.parse_task(line)
+    assert time.monotonic() - start < 2
+
+
+def test_a_bracketed_name_in_settings_does_not_stop_the_build(tmp_path):
+    (tmp_path / "kit.yaml").write_text("name: [Rob] [Vale]\nvault: x\n")
+    (tmp_path / "people").mkdir()
+    pages, items, errors, _ = cortex.build_outputs(tmp_path)
+    assert not errors and "# Cortex card - Rob] [Vale" in (tmp_path / "_cortex" / "card.md").read_text()
