@@ -1,0 +1,41 @@
+{
+  "manifest_version": "0.3",
+  "name": "cortex-chat",
+  "display_name": "Cortex",
+  "version": "0.1.0",
+  "description": "Your Cortex in the Claude app's Chat tab: see your card, search and open your pages, save a chat and add to-dos. Everything stays in a folder on this computer.",
+  "author": { "name": "Personal Cortex" },
+  "license": "Apache-2.0",
+  "server": {
+    "type": "node",
+    "entry_point": "server/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/server/index.js"],
+      "env": { "CORTEX_FOLDER": "${user_config.cortex_folder}" }
+    }
+  },
+  "tools": [
+    { "name": "cortex_card", "description": "Show the start card." },
+    { "name": "cortex_search", "description": "Search your pages." },
+    { "name": "cortex_page", "description": "Open one page." },
+    { "name": "cortex_inbox", "description": "List what is waiting to be filed." },
+    { "name": "cortex_todo_add", "description": "Propose one to-do or follow-up." },
+    { "name": "cortex_save_chat", "description": "Propose this chat as a note in the inbox." },
+    { "name": "cortex_accept", "description": "File a proposal as a new session page." },
+    { "name": "cortex_setup", "description": "Create a new, empty cortex." }
+  ],
+  "compatibility": {
+    "platforms": ["darwin", "win32"],
+    "runtimes": { "node": ">=18.0.0" }
+  },
+  "user_config": {
+    "cortex_folder": {
+      "type": "directory",
+      "title": "Cortex folder",
+      "description": "The folder that holds your Cortex. If you have no Cortex yet, leave this as it is and say \"set up my cortex\" in a chat.",
+      "required": false,
+      "default": "${HOME}/cortex"
+    }
+  }
+}
