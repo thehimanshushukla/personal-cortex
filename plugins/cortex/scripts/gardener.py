@@ -1000,7 +1000,7 @@ def run_if_due(vault: Path, now: float | None = None) -> str | None:
     due = last_due(now)
     stamp = state_dir() / "last-weekly-run"
     try:
-        if float(stamp.read_text().strip()) >= due.timestamp():
+        if due.timestamp() <= float(stamp.read_text().strip()) <= now:     # a stamp in the future is a wrong clock
             return None
     except (OSError, ValueError):
         pass

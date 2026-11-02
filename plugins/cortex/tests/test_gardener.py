@@ -1707,6 +1707,12 @@ def test_broken_stamp_runs_rather_than_skips(env):
     assert G.run_if_due(env["vault"], at(2026, 11, 2, 11, 0))
 
 
+@pytest.mark.parametrize("stamp", ["1893456000", "inf", "1e400"])
+def test_future_stamp_does_not_silence_the_job(env, stamp):
+    (G.state_dir() / "last-weekly-run").write_text(stamp)
+    assert G.run_if_due(env["vault"], at(2026, 11, 2, 10, 0))
+
+
 def test_rows_are_in_the_order_of_the_dates_shown(env):
     """A session resumed later has a new file time but keeps its start date, which is what is shown."""
     now = time.time()

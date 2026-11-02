@@ -578,3 +578,58 @@ def test_card_says_saved_from_chat(env):
     run(env, "build")
     card = (env["vault"] / "_cortex" / "card.md").read_text()
     assert "saved from chat" in card and "imported note" not in card
+
+
+@pytest.mark.parametrize("files", [{}, {"home.md": "MY OWN HOME NOTES", "report.md": "mine"}])
+def test_start_hook_never_builds_in_a_folder_with_no_cortex(env, files):
+    v = env["vault"]
+    for child in list(v.iterdir()):
+        if child.name != ".git":
+            subprocess.run(["rm", "-rf", str(child)], check=True)
+    for name, text in files.items():
+        (v / name).write_text(text)
+    hook(env, "session-start", {"session_id": "nocortex"})
+    assert not (v / "_cortex").exists()
+    for name, text in files.items():
+        assert (v / name).read_text() == text
+
+
+def test_a_broken_link_is_not_silent(env):
+    """The build refuses a broken .md link, so the person must be told, not shown an old card as if current."""
+    seed(env)
+    run(env, "build")
+    (env["vault"] / "aaa-link.md").symlink_to(env["vault"] / "missing-target")
+    assert "may be out of date" in hook(env, "session-start", {"session_id": "link"}).stdout
+
+
+def test_a_failed_rebuild_says_the_card_may_be_old(env):
+    seed(env)
+    run(env, "build")
+    card = env["vault"] / "_cortex" / "card.md"
+    old = card.stat().st_mtime - 100
+    os.utime(card, (old, old))
+    (env["vault"] / "bad.md").write_text("---\nid: bad\ntitle: Bad\ntype: nonsense\n---\nx\n")
+    assert "stopped" in run(env, "build").stdout
+    os.utime(card, (old, old))
+    assert "may be out of date" in hook(env, "session-start", {"session_id": "bad"}).stdout
+
+
+def test_a_nested_home_page_counts_as_a_change(env):
+    seed(env)
+    run(env, "build")
+    card = env["vault"] / "_cortex" / "card.md"
+    old = card.stat().st_mtime - 100
+    nested = env["vault"] / "notes" / "home.md"
+    nested.parent.mkdir(exist_ok=True)
+    nested.write_text("x")
+    os.utime(card, (old, old))
+    hook(env, "session-start", {"session_id": "nested"})
+    assert card.stat().st_mtime > old
+
+
+def test_chat_note_with_a_byte_order_mark_still_counts(env):
+    seed(env)
+    (env["vault"] / "inbox").mkdir(exist_ok=True)
+    (env["vault"] / "inbox" / "chat-x.md").write_text("\ufeffsource: chat\nstatus: proposed\nname: X\n")
+    run(env, "build")
+    assert "saved from chat" in (env["vault"] / "_cortex" / "card.md").read_text()

@@ -561,9 +561,10 @@ def overlong_tasks(pages: list[Page]) -> tuple[int, list[str]]:
 def chat_proposal_name(path: Path) -> str | None:
     """The name of a note saved from the Chat tab, or None for any other note. Same test as the connector."""
     try:
-        top = path.read_text(errors="replace").split("\n## ", 1)[0].split("\n")
+        lines = path.read_text(errors="replace").lstrip("\ufeff").split("\n")
     except OSError:
         return None
+    top = lines[:next((i for i, l in enumerate(lines) if l.startswith("## ")), len(lines))]
     if "source: chat" not in top or "status: proposed" not in top:
         return None
     return next((l[6:].strip() for l in top if l.startswith("name: ")), "") or path.stem
