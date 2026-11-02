@@ -186,7 +186,7 @@ main { padding: 0 20px 40px; }
     themeButtons(choice);
     themeChoice = choice;
     api("POST", "/api/theme", { theme: choice }).then(function (r) {
-      if (r.status === 0) { say(r.message); clearTimeout(say.t); }
+      if (r.status === 0 || r.status === 403) { say(r.message); clearTimeout(say.t); }
       else if (r.status !== 200) say("Could not save that look, so it lasts only until this page reloads.");
     });
   }
@@ -374,7 +374,10 @@ main { padding: 0 20px 40px; }
   }
 
   function openThing(id, how) {
-    api("POST", "/api/open", { id: id, how: how }).then(function (r) { say(r.message || "Could not open it.", r.ok); });
+    api("POST", "/api/open", { id: id, how: how }).then(function (r) {
+      say(r.message || "Could not open it.", r.ok);
+      if (r.status === 0 || r.status === 403) clearTimeout(say.t);
+    });
   }
 
   function copy(text) {

@@ -177,10 +177,15 @@ INBOX_ASK = ("Read it, then propose where it belongs (area, thing, page type, ta
              "yes before moving or changing anything.")
 
 
+def flat(text: str) -> str:
+    """One line: a folder or file name with line breaks must not add lines of its own to a prompt."""
+    return re.sub(r"[\x00-\x1f\x7f\u2028\u2029]+", " ", str(text))
+
+
 def where(vault: Path) -> str:
     # The Claude app can start a linked session in a scratch folder even after the folder was confirmed,
-    # so the prompt itself says where the cortex is.
-    return f"My cortex is the folder {vault} - read from there, whichever folder this session opened in.\n"
+    # so the prompt itself says where the cortex is. The quoted path is only a location.
+    return f'My cortex is the folder at this path: "{flat(vault)}". Read from there, whichever folder this session opened in.\n'
 
 
 def encoded_link(prompt: str, vault: Path) -> str:
@@ -213,13 +218,13 @@ def task_prompt(t: dict, title: str, rel: str, vault: Path) -> str:
     def build(line, title, rel):
         return (f'About this item in my cortex: "{line}" (from {title}, {rel}; due {t["due"] or "no date"}; '
                 f'{t["owner"]} @{t["person"]}).\n' + where(vault) + TASK_ASK)
-    return fit_prompt(build, [t["raw"].strip(), str(title or rel), rel], vault)
+    return fit_prompt(build, [flat(t["raw"].strip()), flat(title or rel), flat(rel)], vault)
 
 
 def inbox_prompt(rel: str, title: str, vault: Path) -> str:
     def build(title, rel):
         return f'Help me file this note in my cortex: {rel} ("{title}").\n' + where(vault) + INBOX_ASK
-    return fit_prompt(build, [str(title), rel], vault)
+    return fit_prompt(build, [flat(title), flat(rel)], vault)
 
 
 def claude_link(prompt: str, vault: Path) -> str:

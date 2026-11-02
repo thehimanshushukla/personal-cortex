@@ -61,7 +61,7 @@ def sync_engine() -> None:
     root = HERE.parent
     stamp = ENGINE / ".source"
     marker = f"{root}|{(root / '.claude-plugin' / 'plugin.json').stat().st_mtime if (root / '.claude-plugin' / 'plugin.json').exists() else 0}"
-    if stamp.exists() and stamp.read_text() == marker:
+    if stamp.exists() and stamp.read_text() == marker and (ENGINE / ".claude-plugin" / "plugin.json").exists():
         return
     ENGINE.mkdir(parents=True, exist_ok=True)
     for sub in ("scripts", "templates", "docs", ".claude-plugin"):   # the upgrade skill reads the version from .claude-plugin
