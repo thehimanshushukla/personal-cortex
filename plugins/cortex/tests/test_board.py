@@ -708,3 +708,23 @@ def test_busy_message_prints_the_exact_command(env, tmp_path):
     finally:
         if p.poll() is None:
             p.kill()
+
+
+def test_theme_saved_outside_the_vault_and_put_on_the_page(env, srv):
+    assert '<html lang="en" data-choice="system">' in call(srv, "GET", "/")[1]
+    assert call(srv, "POST", "/api/theme", {"theme": "night"})[0] == 200
+    assert (env["home"] / ".cortex" / "board-theme").read_text() == "night"
+    code, page, hdrs = call(srv, "GET", "/")
+    assert '<html lang="en" data-choice="night">' in page and "font-src 'self'" in hdrs["Content-Security-Policy"]
+    assert call(srv, "POST", "/api/theme", {"theme": "system"})[0] == 200
+    assert not (env["home"] / ".cortex" / "board-theme").exists()
+    assert call(srv, "POST", "/api/theme", {"theme": '"><script>'})[0] == 400
+
+
+def test_theme_bad_file_falls_back_and_font_is_served_with_the_key_only(env, srv):
+    (env["home"] / ".cortex" / "board-theme").write_text('"><script>alert(1)</script>')
+    assert 'data-choice="system"' in call(srv, "GET", "/")[1]
+    req = urllib.request.Request(f"http://127.0.0.1:{srv.port}/geist.woff2", headers={"Cookie": f"{srv.cookie}={srv.token}"})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        assert r.status == 200 and r.read(4) == b"wOF2"
+    assert call(srv, "GET", "/geist.woff2", token=False)[0] == 403

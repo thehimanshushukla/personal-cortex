@@ -34,6 +34,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cortex as C  # noqa: E402
 
 PAGE = Path(__file__).resolve().parent / "board.html"
+FONT = Path(__file__).resolve().parent / "geist.woff2"   # Geist (SIL Open Font License), so the page calls nothing outside this Mac
+THEMES = {"paper", "blue", "night"}
 IDLE_SECONDS = 30 * 60
 PROMPT_LIMIT = 9000          # characters of the decoded prompt
 URL_LIMIT = 14000            # characters of the whole encoded claude:// link
@@ -48,6 +50,19 @@ TARGETS = {key for key, _, droppable in COLUMNS if droppable}
 
 def state_file() -> Path:
     return Path.home() / ".cortex" / "board.json"
+
+
+def theme_file() -> Path:
+    return Path.home() / ".cortex" / "board-theme"
+
+
+def saved_theme() -> str:
+    """'paper', 'blue' or 'night', or 'system' when nothing valid is saved."""
+    try:
+        t = theme_file().read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeDecodeError):
+        return "system"
+    return t if t in THEMES else "system"
 
 
 def trash_dir(vault: Path) -> Path:
@@ -608,12 +623,15 @@ class Handler(BaseHTTPRequestHandler):
             if url.path == "/":
                 nonce = secrets.token_urlsafe(16)
                 html = PAGE.read_text(encoding="utf-8").replace("<script>", f'<script nonce="{nonce}">')
+                html = html.replace('<html lang="en">', f'<html lang="en" data-choice="{saved_theme()}">', 1)
                 csp = (f"default-src 'none'; script-src 'nonce-{nonce}'; style-src 'unsafe-inline'; "
-                       "connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; "
+                       "connect-src 'self'; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'none'; "
                        "frame-ancestors 'none'")
                 cookie = f"{self.server.cookie}={self.server.token}; HttpOnly; SameSite=Strict; Path=/"
                 self._send(200, html.encode("utf-8"), "text/html; charset=utf-8",
                            {"Content-Security-Policy": csp, "Set-Cookie": cookie})
+            elif url.path == "/geist.woff2":
+                self._send(200, FONT.read_bytes(), "font/woff2")
             elif url.path == "/api/state":
                 self._json(200, board.state())
             elif url.path == "/api/item":
@@ -648,6 +666,15 @@ class Handler(BaseHTTPRequestHandler):
         board: Board = self.server.board
         path = urllib.parse.urlsplit(self.path).path
         try:
+            if path == "/api/theme":
+                choice = str(data.get("theme", ""))
+                if choice not in THEMES | {"system"}:
+                    return self._json(400, {"ok": False, "message": "Unknown theme."})
+                if choice == "system":
+                    theme_file().unlink(missing_ok=True)
+                else:
+                    theme_file().write_text(choice, encoding="utf-8")
+                return self._json(200, {"ok": True, "theme": choice})
             if path == "/api/move":
                 out = board.move(str(data.get("id", "")), str(data.get("sha", "")), str(data.get("to", "")))
             elif path == "/api/undo":

@@ -11,6 +11,8 @@ The board and inbox: say "show my board".
 - Safe by design: the board only answers this Mac, needs the secret key in its link, never changes a line it cannot find exactly once ("this page changed - reloaded"), checks the page after every change and puts it back if the check fails, and rebuilds the card right after.
 - Task lines can carry `(added <date>)`, `(done <date>)` and `{doing}`. Log and debrief write `(added <date>)` on every new line. Existing lines work exactly as before.
 - The start card says "say 'show my board' to open them" next to overdue items.
+- The board has three looks, Paper, Blue and Night, and follows your Mac unless you pick one. Your choice is remembered. The font ships with the kit, so the page still calls nothing outside your Mac.
+- A closed board says so plainly, and Refresh no longer says "Up to date" when it has closed.
 
 ## 0.3.1
 Fixes from the first weeks of real use:
