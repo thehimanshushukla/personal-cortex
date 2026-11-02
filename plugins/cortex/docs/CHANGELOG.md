@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.4.1
+"Update my cortex" now offers to update the plugin for you. The Update button in the app's Plugins screen did not fetch a new version in testing.
+
 ## 0.4.0
 The board and inbox: say "show my board".
 - A page in your browser, on this Mac only, with every to-do and follow-up as a card in six columns: Overdue, This week, Later, In progress, Waiting on others, Done (last 7 days). Filter by area or person.

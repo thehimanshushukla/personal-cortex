@@ -10,8 +10,9 @@ The kit (plugin) is replaced as a whole; the person's pages are never edited, mo
 ## 1. Update the plugin
 
 Explain and guide them, one step at a time:
-- In the Claude desktop app (Code tab): type `/plugin` and press the send button, which opens Plugins. Click Cortex, then **Update**. If there is no Update button, they may already be on the newest version: go on to step 2, which compares the versions. If step 2 then shows no newer version but the release notes do, use the terminal command below.
-- In a terminal the same is `claude plugin update cortex@personal-cortex`. Do not offer the terminal command to someone working in the Code tab unless the button is missing and a newer version exists.
+- Offer to run it for them, on a yes: `claude plugin update cortex@personal-cortex`. It fetches the new version from GitHub. If `claude` is not found, use the newest app copy: `ls -d ~/Library/Application\ Support/Claude/claude-code/*/ | tail -1`, then run the `claude` program found under that folder (`find <folder> -type f -name claude`).
+- Do not rely on the Update button in the Plugins screen: tested on 2 Nov 2026 with a version waiting on GitHub, it stayed on the old version and showed no error.
+- If the command says it is already on the latest version, go on to step 2.
 - After updating, start a new session (the update applies to new sessions). If they started this skill in the old session, ask them to open a new one and say "update my cortex" again; then continue from step 2.
 
 ## 2. Compare versions
