@@ -864,7 +864,7 @@ def inventory(vault: Path, days: int = 7, budget: float = CLI_SECONDS, now: floa
     at_risk = [r for r in missed_all if r["source"] == "claude" and now - r["mtime"] > WARN_DAYS * 86400]
     oldest = min((r["mtime"] for r in at_risk), default=0)
     newest_first = lambda status, among: [public_row(r, now) for r in sorted((r for r in among if r["status"] == status),  # noqa: E731
-                                                                             key=lambda r: r["mtime"], reverse=True)]
+                                                                             key=lambda r: (r["date"], r["mtime"]), reverse=True)]
     report = {
         "scope": info["scope"], "window_days": days + OVERLAP_DAYS,
         "days_asked": asked, "days_cut": asked > days, "too_old": info["too_old"],
@@ -984,15 +984,43 @@ def write_journal(vault: Path, week: str | None = None, now: float | None = None
 
 # ---------------------------------------------------------------- the schedule (only on a person's yes)
 
+def last_due(now: float) -> dt.datetime:
+    """The most recent Sunday 17:00 on this Mac's clock."""
+    moment = dt.datetime.fromtimestamp(now)
+    sunday = moment.date() - dt.timedelta(days=(moment.weekday() + 1) % 7)
+    due = dt.datetime.combine(sunday, dt.time(17, 0))
+    return due if due <= moment else due - dt.timedelta(days=7)
+
+
+def run_if_due(vault: Path, now: float | None = None) -> str | None:
+    """launchd starts this at Sunday 17:00, on waking if the Mac slept through it, and at every login.
+    So a Mac that was off still gets its run when it comes back, and a login in the same week does
+    nothing. The journal is for the week that ended on the missed Sunday, not the week it runs in."""
+    now = time.time() if now is None else now
+    due = last_due(now)
+    stamp = state_dir() / "last-weekly-run"
+    try:
+        if float(stamp.read_text().strip()) >= due.timestamp():
+            return None
+    except (OSError, ValueError):
+        pass
+    refresh(vault)
+    year, num, _ = due.date().isocalendar()[:3]
+    path = write_journal(vault, f"{year}-W{num:02d}", now)
+    C.write_atomic(stamp, str(now))
+    return str(path)
+
+
 PLIST = """<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
   <key>Label</key><string>com.cortex.gardener</string>
   <key>ProgramArguments</key><array>
     <string>/usr/bin/python3</string><string>{script}</string>
-    <string>gardener</string><string>--refresh</string><string>--journal</string><string>--quiet</string>
+    <string>gardener</string><string>--if-due</string><string>--quiet</string>
     <string>--vault</string><string>{vault}</string>
   </array>
+  <key>RunAtLoad</key><true/>
   <key>StartCalendarInterval</key><dict><key>Weekday</key><integer>0</integer>
     <key>Hour</key><integer>17</integer><key>Minute</key><integer>0</integer></dict>
   <key>StandardOutPath</key><string>{home}/.cortex/gardener/agent.log</string>
@@ -1004,8 +1032,9 @@ PLIST = """<?xml version="1.0" encoding="UTF-8"?>
 def install_schedule(args) -> int:
     """Setup and upgrade never call this: it runs only when a person has said yes to a weekly run."""
     if not args.yes:
-        print("This would run the Gardener every Sunday at 17:00: it counts your sessions and writes the "
-              "weekly journal. No AI, nothing sent anywhere. Nothing was changed. Run again with --yes to switch it on.")
+        print("This would run the Gardener every Sunday at 17:00, or as soon as your Mac is back if it was asleep "
+              "or off then. It counts your sessions and writes the weekly journal. It does not need the Claude app open. "
+              "No AI, nothing sent anywhere. Nothing was changed. Run again with --yes to switch it on.")
         return 0
     vault = C.vault_path(args.vault)
     script = home() / ".cortex" / "engine" / "scripts" / "cortex.py"   # kept current by every session start
@@ -1025,7 +1054,8 @@ def install_schedule(args) -> int:
     if r.returncode != 0:
         print(f"Weekly Gardener file written but could not be switched on: {r.stderr.strip()}")
         return 1
-    print("The weekly Gardener is on: every Sunday at 17:00. No AI, nothing sent anywhere.")
+    print("The weekly Gardener is on: every Sunday at 17:00, or as soon as your Mac is back if it was asleep or off then. "
+          "It does not need the Claude app open. No AI, nothing sent anywhere.")
     return 0
 
 
@@ -1080,6 +1110,11 @@ def run(args) -> int:
     if not vault.is_dir():
         print(f"could not read your cortex folder {vault} - it is not there.")
         return 1
+    if args.if_due:
+        path = run_if_due(vault)
+        if not args.quiet:
+            print(f"Wrote {path}" if path else "This week's run is already done.")
+        return 0
     if args.refresh:
         refresh(vault)
         if not args.journal:

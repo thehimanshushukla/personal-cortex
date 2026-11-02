@@ -455,7 +455,7 @@ main { padding: 0 20px 40px; }
     var groups = [
       ["desk", "Proposals on the sorting desk", "Where Claude suggests each imported note should go. Say 'open the sorting desk' in Claude to accept or change them.",
         function (r) { return "#" + r.n + " " + r.title + (r.where ? " - to " + r.where : "") + (r.type ? " (" + r.type + ")" : ""); }],
-      ["notes", "Notes in inbox/", "Imported notes waiting for a home.", function (r) { return r.title; }],
+      ["notes", "Notes in inbox/", "Saved or imported notes waiting for a home.", function (r) { return r.title; }],
       ["loose", "Loose notes", "Pages with no header. Tasks in them are not on the board until they get one.",
         function (r) { return r.title + (r.tasks ? " - " + r.tasks + " task line(s) not counted" : ""); }],
       ["unsaved", "Pages not saved yet", "Changed on this Mac but not yet saved to your backup. Say 'back up my cortex' in Claude.",

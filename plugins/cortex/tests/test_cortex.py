@@ -548,3 +548,33 @@ def test_a_bracketed_name_in_settings_does_not_stop_the_build(tmp_path):
     (tmp_path / "people").mkdir()
     pages, items, errors, _ = cortex.build_outputs(tmp_path)
     assert not errors and "# Cortex card - Rob] [Vale" in (tmp_path / "_cortex" / "card.md").read_text()
+
+
+def test_start_hook_rebuilds_a_card_older_than_the_pages(env):
+    """The Chat tab writes pages but cannot build: a new session must still see them."""
+    seed(env)
+    run(env, "build")
+    card = env["vault"] / "_cortex" / "card.md"
+    old = card.stat().st_mtime - 100
+    os.utime(card, (old, old))
+    page = next((env["vault"]).glob("**/sessions/*.md"), None) or next(p for p in env["vault"].rglob("*.md") if "_cortex" not in p.parts and p.name != "home.md")
+    page.write_text(page.read_text() + "\n- [ ] @me Fresh task from chat (added 2026-11-02) {mine}\n")
+    assert card.stat().st_mtime == old
+    hook(env, "session-start", {"session_id": "fresh"})
+    assert card.stat().st_mtime > old
+
+
+def test_start_hook_builds_a_missing_card(env):
+    seed(env)
+    run(env, "build")
+    (env["vault"] / "_cortex" / "card.md").unlink()
+    assert "not built yet" not in hook(env, "session-start", {"session_id": "missing"}).stdout
+
+
+def test_card_says_saved_from_chat(env):
+    seed(env)
+    (env["vault"] / "inbox").mkdir(exist_ok=True)
+    (env["vault"] / "inbox" / "chat-x.md").write_text("source: chat\nstatus: proposed\nname: X\n\n## Follow-ups\n")
+    run(env, "build")
+    card = (env["vault"] / "_cortex" / "card.md").read_text()
+    assert "saved from chat" in card and "imported note" not in card

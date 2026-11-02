@@ -34,7 +34,14 @@ function clipChars(text, max) {
 // ---------------------------------------------------------------- reads
 
 function cortexCard() {
-  const vault = V.requireVault();
+  let vault;
+  try {
+    vault = V.requireVault();
+  } catch (e) {
+    // No Cortex yet is the normal first run, not a failure: the app would show it in red.
+    if (e.notSetUp) return e.message;
+    throw e;
+  }
   return wrap(card(vault, MAX_CARD_BYTES - Buffer.byteLength(wrap(''))).trimEnd());
 }
 

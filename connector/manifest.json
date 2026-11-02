@@ -33,7 +33,7 @@
     "cortex_folder": {
       "type": "directory",
       "title": "Cortex folder",
-      "description": "The folder that holds your Cortex. If you have no Cortex yet, leave this as it is and say \"set up my cortex\" in a chat. If ~/.cortex/config.json exists, that file decides the folder and this setting is ignored.",
+      "description": "The folder that holds your Cortex. If you have no Cortex yet, leave this as it is and say \"set up my cortex\" in a chat. After changing this, quit and reopen the Claude app. If ~/.cortex/config.json exists, that file decides the folder and this setting is ignored.",
       "required": false,
       "default": "${HOME}/cortex"
     }

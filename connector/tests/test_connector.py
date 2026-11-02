@@ -167,6 +167,8 @@ def chat_wording(card):
     card = re.sub(r"(\d+) overdue - say 'show my board' to open them\.", r"\1 overdue.", card)
     card = re.sub(r"Sorting desk: (\d+) imported note\(s\) waiting\. Say 'open the sorting desk'\.",
                   r"Inbox: \1 note(s) waiting. Say 'what is in my inbox'.", card)
+    card = re.sub(r"(Inbox: \d+ note\(s\) waiting, \d+ saved from chat\.) Say 'open the sorting desk'\.",
+                  r"\1 Say 'what is in my inbox'.", card)
     card = card.replace("with no header. Say 'open the sorting desk'.", "with no header.")
     card = card.replace(" Say 'what is on my list' for all of them.", "")
     card = card.replace(" Say 'what did I promise whom' for the full list.", "")
@@ -254,7 +256,9 @@ def test_missing_cortex_points_to_setup(tmp_path):
     home = tmp_path / "home"
     home.mkdir()
     s = Server(home)
-    for tool, args in (("cortex_card", {}), ("cortex_search", {"query": "x"}), ("cortex_inbox", {}),
+    text, is_error = s.call("cortex_card")
+    assert "set up my cortex" in text and "quit and reopen the Claude app" in text and not is_error   # the normal first run
+    for tool, args in (("cortex_search", {"query": "x"}), ("cortex_inbox", {}),
                        ("cortex_save_chat", {"title": "T", "summary": "S"})):
         assert "set up my cortex" in s.refused(tool, **args)
     s.close()
@@ -330,7 +334,8 @@ def test_folder_without_a_cortex_is_refused(tmp_path):
     (home / "cortex").mkdir(parents=True)
     (home / "cortex" / "report.md").write_text("Not a cortex")
     s = Server(home)
-    assert "no Cortex in it" in s.refused("cortex_card")
+    assert "no Cortex in it" in s.call("cortex_card")[0]
+    assert "no Cortex in it" in s.refused("cortex_search", query="x")
     s.close()
 
 

@@ -166,6 +166,24 @@ def gardener_line(v: Path) -> str:
     return "\n".join(lines)
 
 
+
+def refresh_card(v: Path, card: Path) -> None:
+    """The Chat tab writes pages but cannot build, so the card can be missing or older than the pages.
+    Rebuild then. If it fails or is slow, the old card is still shown and the session is not held up."""
+    try:
+        built = card.stat().st_mtime if card.exists() else 0
+        stale = not built
+        for root, dirs, files in os.walk(v):
+            dirs[:] = [d for d in dirs if not d.startswith(".") and d != "_cortex"]
+            if stale:
+                break
+            stale = any(f.endswith(".md") and f != "home.md" and os.stat(os.path.join(root, f)).st_mtime > built for f in files)
+        if stale:
+            subprocess.run([sys.executable, str(Path(__file__).resolve().parent / "cortex.py"), "--vault", str(v), "build"],
+                           capture_output=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        pass
+
 def session_start(p: dict) -> int:
     try:
         sync_engine()
@@ -188,6 +206,7 @@ def session_start(p: dict) -> int:
         emit_context("SessionStart", f"Cortex: the cortex folder {v} is missing. Suggest 'cortex doctor' via the guide skill.")
         return 0
     card = v / "_cortex" / "card.md"
+    refresh_card(v, card)
     text = card.read_text() if card.exists() else "Cortex card not built yet."
     unsaved = unsaved_pages(v)
     unpushed = unpushed_commits(v)

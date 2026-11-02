@@ -413,7 +413,7 @@ class Board:
             if self.inside(f.relative_to(v).as_posix()) is None:
                 continue
             p = C.read_page(f, v)
-            out["notes"].append(self._inbox_row("note", p.rel, str(p.get("title") or f.stem)))
+            out["notes"].append(self._inbox_row("note", p.rel, str(p.get("title") or C.chat_proposal_name(f) or f.stem)))
         for rel in C.loose_notes(v):
             out["loose"].append(self._inbox_row("loose", rel, Path(rel).stem, tasks=C.loose_task_count(v, rel)))
         if out["git"]:

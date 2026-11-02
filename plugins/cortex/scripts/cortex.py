@@ -557,6 +557,17 @@ def overlong_tasks(pages: list[Page]) -> tuple[int, list[str]]:
     return count, rels
 
 
+
+def chat_proposal_name(path: Path) -> str | None:
+    """The name of a note saved from the Chat tab, or None for any other note. Same test as the connector."""
+    try:
+        top = path.read_text(errors="replace").split("\n## ", 1)[0].split("\n")
+    except OSError:
+        return None
+    if "source: chat" not in top or "status: proposed" not in top:
+        return None
+    return next((l[6:].strip() for l in top if l.startswith("name: ")), "") or path.stem
+
 def render_card(pages: list[Page], items: list[dict], vault: Path) -> str:
     now = dt.date.today()
     cfg = parse_kit(vault)
@@ -613,7 +624,11 @@ def render_card(pages: list[Page], items: list[dict], vault: Path) -> str:
         lines += [f"{overdue} overdue - say 'show my board' to open them.", ""]
     inbox = list((vault / "inbox").glob("*.md")) if (vault / "inbox").exists() else []
     if inbox:
-        lines += [f"Sorting desk: {len(inbox)} imported note(s) waiting. Say 'open the sorting desk'.", ""]
+        from_chat = sum(1 for f in inbox if chat_proposal_name(f) is not None)
+        if from_chat:
+            lines += [f"Inbox: {len(inbox)} note(s) waiting, {from_chat} saved from chat. Say 'open the sorting desk'.", ""]
+        else:
+            lines += [f"Sorting desk: {len(inbox)} imported note(s) waiting. Say 'open the sorting desk'.", ""]
     loose = loose_notes(vault)
     if loose:
         lines += [f"Loose notes: {len(loose)} with no header. Say 'open the sorting desk'.", ""]
@@ -1088,6 +1103,7 @@ def main(argv=None) -> int:
     bd.add_argument("--stop", action="store_true")
     g = sub.add_parser("gardener"); g.add_argument("--days", type=int, default=7); g.add_argument("--json", action="store_true")
     g.add_argument("--journal", action="store_true"); g.add_argument("--week"); g.add_argument("--refresh", action="store_true")
+    g.add_argument("--if-due", action="store_true")
     g.add_argument("--quiet", action="store_true"); g.add_argument("--dismiss"); g.add_argument("--undismiss")
     ig = sub.add_parser("install-gardener"); ig.add_argument("--yes", action="store_true")
     # --vault is accepted after the subcommand too (the LaunchAgent passes it that way)

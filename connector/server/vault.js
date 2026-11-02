@@ -40,6 +40,7 @@ const ENTITIES = { lt: '<', gt: '>', sol: '/', bsol: '\\', lowbar: '_', underbar
 
 // A refusal or problem to show the person in plain words. Anything else is a real bug.
 class UserError extends Error {}
+const notSetUp = (message) => Object.assign(new UserError(message), { notSetUp: true });
 
 const cmp = (a, b) => Buffer.compare(Buffer.from(String(a)), Buffer.from(String(b))); // Python's string order
 
@@ -148,12 +149,12 @@ function requireVault() {
     st = fs.statSync(where);
   } catch (e) {
     if (src.fromConfig) throw new UserError(configPointsNowhere(src));
-    throw new UserError(`No Cortex found at ${where} (${folderReason(src)}). Say "set up my cortex" and one can be created there.`);
+    throw notSetUp(`No Cortex found at ${where} (${folderReason(src)}). Say "set up my cortex" and one can be created there. If you just chose another folder in the extension's settings, quit and reopen the Claude app first: chats keep using the old folder until then.`);
   }
   if (!st.isDirectory()) throw new UserError(`${where} is a file, not a folder, so it cannot hold a Cortex (${folderReason(src)}).`);
   const real = fs.realpathSync.native(where);
   if (!fs.existsSync(path.join(real, 'kit.yaml')) && !fs.existsSync(path.join(real, GENERATED))) {
-    throw new UserError(`The folder ${where} has no Cortex in it (${folderReason(src)}). Say "set up my cortex" if it is empty, or point Cortex at the folder that holds your pages.`);
+    throw notSetUp(`The folder ${where} has no Cortex in it (${folderReason(src)}). Say "set up my cortex" if it is empty, or point Cortex at the folder that holds your pages.`);
   }
   return real;
 }
