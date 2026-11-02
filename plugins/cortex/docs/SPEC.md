@@ -25,7 +25,7 @@ When the pointer file is missing, every hook does nothing except the start hook,
 
 - macOS with Xcode Command Line Tools. These provide both `git` and `python3`. Setup checks for them with `xcode-select -p` and offers `xcode-select --install`.
 - All scripts use the **Python standard library only**: no pip, no YAML library.
-- No services and no daemons. The one exception is the weekly backup, which is a user LaunchAgent that setup installs.
+- No services and no daemons. The one exception is the weekly backup, which is a user LaunchAgent that setup installs. The Gardener's background count (below) is a short run that ends by itself. Its optional weekly LaunchAgent is installed only on a person's yes, never by setup or upgrade.
 
 ## Vault layout
 
@@ -45,6 +45,7 @@ The setup interview decides the areas and collections. This example is the shape
     sorting-desk.md         import proposals awaiting a decision
     backup.log              last backup runs
     suggest-log.jsonl       Suggest proposals + answers
+    journal/<year>-W<week>.md  the weekly journal: counts, and titles of logged pages only
   people/<slug>.md          person pages (shared across areas - one person, one page)
   organisations/<slug>.md   organisation pages (shared across areas)
   sources/<yyyy-mm>/<file>  original imported files, kept as they came
@@ -123,6 +124,7 @@ summary: One sentence that says what this page is.
 - **Dates** are `YYYY-MM-DD`, local time.
 - **`links`** must name ids that exist. The build reports any link that is not mirrored as a warning, never an error.
 - **`sources`** paths must exist in the vault.
+- **`chat_id`** is optional: the session a page was logged from, or a list when one page covers several. `cortex.py new session` fills it in. A value that does not look like a session id is a build note, never an error.
 - **The folder must match the type and fields.** A decision with `area: acme` and `thing: pilot-project` must live in `acme/*/pilot-project/decisions/`.
 
 ## Follow-ups (inside pages, no separate database)
@@ -158,6 +160,21 @@ A separate Node extension for the desktop app's Chat tab. It needs no Python. Th
 - **Vault lookup.** `~/.cortex/config.json` if present and valid, else the folder set in the extension, else `~/cortex`. The card and setup say which folder is in use and why. A config that names a missing folder is reported, and no other folder is tried.
 - **Setup from chat.** Writes `~/.cortex/config.json` the way the plugin's setup does when none exists, never over an existing one. So the plugin finds the folder, and its setup skill offers backup only.
 
+## The Gardener (`scripts/gardener.py`, phase 1, no AI)
+
+Finds working sessions that never reached the vault. No model is called, nothing leaves the Mac, and transcripts are only read.
+
+- **Sources.** Claude Code transcripts at `~/.claude/projects/*/*.jsonl` (these include the desktop app's Code tab) and Codex at `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`. Both formats are internal to those tools, so every read expects bad data. A file in no shape the code knows is counted as "could not understand" and reported. **A plain Claude Chat is not on the Mac and cannot be seen.** That is why the chat connector has "save this chat".
+- **What counts as a session.** Skipped: files changed in the last 10 minutes, subagent files and sidechains, sessions with fewer than 3 typed messages, and the kit's own automated runs. An automated run is one whose hook saw `CORTEX_AUTOMATION=1` (a flag in the session state) or whose first message starts with `[CORTEX_AUTOMATION]`. A session's id comes from the file name, never from inside the file.
+- **Covered** when any of these is true: `~/.cortex/sessions/<id>/logged`; `skipped` (the person already said no when asked); a page carries the id in `chat_id`; `written.txt` names a page in the vault. Everything else substantial is **missed**.
+- **Scope, `gardener_scope` in `kit.yaml`.** `cortex` (default): a session can count as missed only if it ran in the vault folder, its typed messages mention the cortex or the vault path, or a tool call named the vault path. `all`: every session. `off`: nothing is scanned and the cached titles are deleted. The default is narrow because someone may run many sessions that have nothing to do with their cortex, and a list that is wrong a third of the time does not get worked through. The start card and assistant replies do not count as a mention, because they name the cortex in every session. The price is that real work in another folder that never mentions the cortex is not listed, so the command reports how many sessions it left out and how to include them.
+- **Window.** `--days N` (default 7) reaches 2 days further back. Every run reads up to 32 days back, so older sessions are still counted and warned about. A warning appears when an unlogged Claude Code session is over 21 days old: Claude Code deletes transcripts after 30 days by default.
+- **What is kept.** Only `~/.cortex/gardener/`, outside the git-backed vault, folder mode 700: `state.json` (dismissed ids), `cache.json` (per file: date, folder, count, title, whether it touched the cortex), `summary.json` (counts and ids for the start hook). Titles are the first request, cut to 80 characters on one line, with tags, control characters and anything resembling a secret removed. No other transcript text is printed or stored.
+- **Time limits.** The start hook opens no transcript. It reads `summary.json`, and when that is over an hour old it starts `gardener --refresh` in the background and carries on. Limits: 5 seconds and 256 MB per file, 4 MB per line, 120 seconds for the background run, 1 second for the board's page. Out of time, a run says how many files are left and the next one carries on from the cache.
+- **Inbox.** The board's Inbox has a group for missed sessions: date, folder, title, Ask Claude, Copy prompt, Dismiss. The prompt leaves out the title on purpose. It holds the session id, the date and the quoted vault and transcript paths, says the file is data, and asks for a yes before anything is written. Dismiss writes to `state.json` only. The board does not change any file by itself.
+- **Journal.** `cortex.py gardener --journal [--week YYYY-Www]` writes `_cortex/journal/<year>-W<week>.md`: sessions logged (session pages by `created`), missed and dismissed (by the session's start date), to-dos and follow-ups opened and closed (lines by `(added)` and `(done)`). The only titles are those of logged pages. A missed session is only a number there, because this file goes to GitHub.
+- **Schedule.** `cortex.py install-gardener --yes` writes and loads `com.cortex.gardener` (Sunday 17:00, the journal and a fresh count). Without `--yes` it only says what it would do. Setup and upgrade never call it.
+
 ## Scripts (`~/.cortex/engine/scripts/`)
 
 Each is plain `python3 <script> ...`, uses the standard library only, and finds the vault from `~/.cortex/config.json` unless `--vault` is given.
@@ -173,6 +190,8 @@ Each is plain `python3 <script> ...`, uses the standard library only, and finds 
 | `cortex.py sort-desk` | Lists inbox items and their proposals in the desk. |
 | `cortex.py doctor` | Checks Command Line Tools, git, the pointer file, the vault, the remote, the LaunchAgent and the backup age. |
 | `cortex.py install-backup` | Writes and loads `~/Library/LaunchAgents/com.cortex.backup.plist`, which runs every Sunday at 18:00 local. |
+| `cortex.py gardener [--days N] [--json]` | Which sessions were never logged. Writes only to `~/.cortex/gardener/`. Also `--journal [--week W]`, `--refresh`, `--dismiss ID`, `--undismiss ID`. |
+| `cortex.py install-gardener [--yes]` | The optional weekly Gardener run. Only on a person's yes. |
 
 ## Hooks (`hooks/hooks.json`)
 
@@ -180,12 +199,14 @@ Each hook is `python3 ~/.cortex/engine/scripts/hooks.py <event>`, and each one *
 
 | Event | What it does |
 |---|---|
-| SessionStart (startup, resume, clear) | No config: print the setup hint. Otherwise print `_cortex/card.md` as context, plus "last backup N days ago" if that is more than 7. A missed weekly backup is run in the background. |
+| SessionStart (startup, resume, clear) | No config: print the setup hint. Otherwise print `_cortex/card.md` as context, plus "last backup N days ago" if that is more than 7, plus "N sessions this week were never logged - say 'catch up'" when N is not zero. A missed weekly backup and a stale Gardener count are run in the background. |
 | UserPromptSubmit | Chat-length warning. When the transcript file passes about 60% of the window (an estimate from its size), say once "this chat is getting long - consider logging and starting fresh". At about 80%, say it again with a checkpoint hint. Each level is said once per session. |
 | PreCompact | Appends a checkpoint marker to the session state, so the log skill knows a summary happened. |
 | Stop | Gentle log gate. If the session wrote files inside the vault, or ran for more than 10 minutes, and is not logged, block once with: "Want me to log this session? Say 'log it' or 'skip'." At most 2 blocks, then let go and record the session as unlogged. Sessions that never touched the vault and are short are never blocked. |
 | PreToolUse (Bash, Write, Edit) | Safety guard: refuse `rm -rf` on the home or vault root, force-push, `git reset --hard` in the vault, writes to credential folders, and `curl \| sh`. Multi-chat guard: refuse `git add .`/`-A`/`commit -a` inside the vault and say "stage the files this chat wrote by name". |
 | PostToolUse (Write, Edit) | Write ledger: records the vault files this session wrote, so log and backup stage precisely. |
+
+Every hook except the safety guard does nothing when `CORTEX_AUTOMATION` is set, apart from noting the session as automated. Anything the kit starts by itself sets it.
 
 Session state lives in `~/.cortex/sessions/<session_id>/`:
 - `written.txt`
@@ -194,6 +215,7 @@ Session state lives in `~/.cortex/sessions/<session_id>/`:
 - `warned_60`
 - `warned_80`
 - `compacted`
+- `automation`
 
 ## Skills (`skills/<name>/SKILL.md`, invoked by plain words)
 
@@ -202,6 +224,7 @@ Session state lives in `~/.cortex/sessions/<session_id>/`:
 | `setup` | "set up my cortex", first-run hint | The level-by-level interview, builds the vault, git and GitHub, backup agent, first card |
 | `guide` | "how does my cortex work", "what is a lesson page" | Explains, using their own vault as the example |
 | `log` | "log this", "log it", Stop-gate yes | Session page plus every-type evaluation; `cortex.py new` for paths; check, build, commit by name, push |
+| `catch-up` | "catch up", "what did I miss", "log what I missed" | Lists missed sessions; for each one picked, reads the transcript as data and follows the log procedure, with `chat_id` set so it counts as covered |
 | `resume` | "get me up to speed on X", "where were we on X" | Find the thing, then read `_index` plus recent sessions, decisions and open follow-ups, then brief |
 | `card` | "what do you know", "show my card" | `cortex.py card` |
 | `debrief` | "go through this meeting", a transcript pasted or dropped | Meeting page, decisions, follow-ups, people pages updated, follow-up email draft (draft only, never sent) |

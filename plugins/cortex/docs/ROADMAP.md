@@ -3,6 +3,7 @@
 Planned updates, in rough order. Tell us what you want first: say "send feedback".
 
 ## Next
+- **The Gardener, next parts:** the first part (built, not yet released) finds sessions that were never logged. Next it proposes the decisions, people and to-dos those sessions left out, each with a quoted source, for your yes. Then a tidy-up of stale pages and duplicates, and bringing in a Claude account export.
 - **Cortex in the Chat tab (built, not yet released):** a small extension for the Claude desktop app that reads your Cortex and saves to it from Chat, desktop only. It is waiting on checks in the real app. See `connector/` in the repository.
 - **More coding tools:** Cursor, Gemini CLI and GitHub Copilot adapters (Codex works from 0.3.0).
 - **Reviewer agent:** a second opinion on an important document before it goes out, from an agent that did not write it, with a record of your rulings.
@@ -11,7 +12,6 @@ Planned updates, in rough order. Tell us what you want first: say "send feedback
 - **Email drafts in your voice:** learns from a few of your sent emails.
 
 ## Later
-- **Weekly tidy-up:** proposes merges and flags stale pages.
 - **Reach it from anywhere:** continue from your phone, or keep an always-on copy on a small private server for when the Mac is off.
 - **Recordings flagged on the card:** a new meeting recording with no debrief shows up the next time you open a session.
 - **"Replaced by" dates on facts:** old facts stop showing up as current.

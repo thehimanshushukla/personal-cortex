@@ -51,7 +51,7 @@ For each page, get the correct path, id and frontmatter from the script, never b
 ```
 python3 ~/.cortex/engine/scripts/cortex.py new <type> --area <area> [--thing <thing>] --title "<title>"
 ```
-Write the page at the path it prints, keeping its frontmatter and filling the body. Today's date from `date +%F` (local time). Use `[[id]]` style links in the body only for pages that exist; also list them in `links:`.
+Write the page at the path it prints, keeping its frontmatter and filling the body. A session page's frontmatter may carry `chat_id:` (the script fills it from this session). Keep it: it is how the kit knows this session is logged. Today's date from `date +%F` (local time). Use `[[id]]` style links in the body only for pages that exist; also list them in `links:`.
 
 Session page body sections: **What we set out to do**, **What was done**, **Decisions** (one line each, linking the decision pages), **Open / next** (follow-up lines).
 

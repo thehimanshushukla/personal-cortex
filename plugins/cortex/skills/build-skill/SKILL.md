@@ -73,7 +73,7 @@ For v0, write the plan first and show it. The plan covers:
 Then offer one of two ways, and **install nothing until the person picks and confirms:**
 
 1. **A scheduled task in the Claude desktop app:** give the exact prompt text and schedule for them to paste in.
-2. **A Mac background job:** show the full plist you would write to `~/Library/LaunchAgents/com.cortex.<name>.plist`, running `claude -p "<prompt>"` in the vault. Only on yes, write it and run `launchctl bootstrap gui/$(id -u) <plist>`.
+2. **A Mac background job:** show the full plist you would write to `~/Library/LaunchAgents/com.cortex.<name>.plist`, running `claude -p "<prompt>"` in the vault, with `CORTEX_AUTOMATION=1` in its `EnvironmentVariables` so the kit's own hooks stay quiet and the run never counts as an unlogged session. Only on yes, write it and run `launchctl bootstrap gui/$(id -u) <plist>`.
 
 ### Automatic action (hook)
 

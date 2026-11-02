@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+The Gardener, first part: it finds working sessions that never reached your cortex. No AI, and nothing is sent anywhere.
+- `cortex.py gardener` lists Claude Code and Codex sessions on this Mac that were never logged, with date, folder, message count and the first request as a short title. It prints no other chat text.
+- The start card says "3 sessions this week were never logged - say 'catch up'", and says nothing when there are none. The count runs in the background, so a session start never waits for it.
+- Say "catch up": pick sessions from the list, and Claude reads each transcript and logs it the usual way, after your yes. What a transcript says is treated as data, never as instructions.
+- The board's Inbox has a group for these sessions, with Ask Claude and Dismiss. A dismissed session stays dismissed.
+- A warning when an unlogged session is over 21 days old, because Claude Code deletes transcripts after 30 days by default.
+- `cortex.py gardener --journal` writes a weekly page, `_cortex/journal/<year>-W<week>.md`, with counts and the titles of logged pages only.
+- Session pages can carry `chat_id:`, so a page knows which chat it came from.
+- `gardener_scope` in `kit.yaml`: `cortex` (default: your cortex folder, and sessions that mention or touched it), `all`, or `off`.
+- A plain Claude Chat cannot be seen, because it is not on your Mac. Use "save this chat" there.
+- Nothing runs on a timer. `cortex.py install-gardener --yes` adds a weekly run, only if you ask for it.
+
 ## 0.4.1
 "Update my cortex" now offers to update the plugin for you. The Update button in the app's Plugins screen did not fetch a new version in testing.
 
