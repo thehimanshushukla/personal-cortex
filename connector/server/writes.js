@@ -90,11 +90,43 @@ function personSlug(value) {
 // The person's own name as a plain slug. cortex.py makes "José" into jos-, so this form is not one of its own.
 const plainSelf = (vault) => V.plainSlug(V.parseKit(vault).name || '');
 
+// {private} in any case and at any place in a value. The tag and the spaces around it come out as one space.
+const TAG_AND_SPACES = new RegExp(`[ \\t]*${V.PRIVATE_TAG.source}[ \\t]*`, 'gi');
+
+function takePrivateTag(value) {
+  const visible = value.replace(/\p{Cf}/gu, ''); // an invisible character inside the tag does not hide it from this
+  if (!V.PRIVATE_TAG.test(visible)) return { value, tagged: false };
+  return { value: visible.replace(TAG_AND_SPACES, ' ').trim(), tagged: true };
+}
+
+// A private task line in the one form every reader agrees on: the tag ends the text, because the dates
+// must sit right before the owner or the kit's parser reads them as words and the due date is lost.
+//   - [ ] @person what {private} (due D) (added D) {owner} {doing}
+function privateForm({ done, person, text: words, meta, owner, doing }) {
+  const parts = [`- [${done}] @${person}`, words.trim(), '{private}', meta.trim(), `{${owner}}`, doing ? '{doing}' : ''];
+  return parts.filter(Boolean).join(' ');
+}
+
+// A line with its private tags taken out, if what is left is a task line. Otherwise null.
+function untaggedTask(line) {
+  const indent = /^\s*/.exec(line)[0];
+  const bare = `${indent}${line.replace(TAG_AND_SPACES, ' ').trim()}`;
+  return V.matchTask(bare) ? bare : null;
+}
+
 // One task line in the kit's grammar: - [ ] @person what (due D) (added D) {owner}
-function taskLine(item, me, self) {
-  if (item === null || typeof item !== 'object' || Array.isArray(item)) throw new UserError('A to-do must have separate fields: what, person, due, owner.');
-  for (const key of Object.keys(item)) {
+function taskLine(given, me, self) {
+  if (given === null || typeof given !== 'object' || Array.isArray(given)) throw new UserError('A to-do must have separate fields: what, person, due, owner.');
+  for (const key of Object.keys(given)) {
     if (!['what', 'person', 'due', 'owner'].includes(key)) throw new UserError(`A to-do has no field called "${key}".`);
+  }
+  const item = { ...given };
+  let isPrivate = false;
+  for (const key of Object.keys(item)) {
+    if (typeof item[key] !== 'string') continue;
+    const { value, tagged } = takePrivateTag(item[key]);
+    item[key] = value;
+    isPrivate = isPrivate || tagged;
   }
   const what = text(item, 'what', 300).replace(/[{}]/g, '');
   if (/\((?:due|added|done)\s+\d{4}-\d{2}-\d{2}\)/.test(what)) throw new UserError('Put the date in the "due" field, not inside "what".');
@@ -105,7 +137,7 @@ function taskLine(item, me, self) {
   if (item.due !== undefined && item.due !== '' && (typeof item.due !== 'string' || !isRealDate(item.due))) {
     throw new UserError(`"due" must be a real date written YYYY-MM-DD (got ${JSON.stringify(item.due).slice(0, 40)}).`);
   }
-  const line = `- [ ] @${person} ${what}${item.due ? ` (due ${item.due})` : ''} (added ${V.localDate()}) {${item.owner}}`;
+  const line = `- [ ] @${person} ${what}${isPrivate ? ' {private}' : ''}${item.due ? ` (due ${item.due})` : ''} (added ${V.localDate()}) {${item.owner}}`;
   if (!V.parseTask(line, me)) throw new UserError('That to-do could not be written as a valid line. Nothing was saved.');
   return line;
 }
@@ -308,6 +340,7 @@ function todoAdd(args) {
     }
   }));
   recordWrite();
+  if (V.PRIVATE_TAG.test(line)) return `Added 1 private item to your inbox, not yet on your card or board. It is tagged private, so it is not repeated here. Say "accept ${TODO_FILE}" with an area to file it.`;
   return `Added to your inbox, not yet on your card or board:\n${line}\nSay "accept ${TODO_FILE}" with an area to file it.`;
 }
 
@@ -410,15 +443,17 @@ function accept(args) {
     const me = V.selfSlugs(vault);
     const clean = (l) => oneLine(l);
     const { sections } = proposal;
-    const tasks = [];
-    const otherFollowups = [];
-    for (const line of sections['Follow-ups']) {
-      const task = V.parseTask(line, me);
-      if (task && SLUG_RE.test(task.person)) tasks.push(line);
-      else if (clean(line)) otherFollowups.push(clean(line));
-    }
-    // A task tagged {private} is hidden: it never makes a people page and is never named in a reply.
     const isPublic = (l) => !V.PRIVATE_TAG.test(l);
+    const rows = []; // the Follow-ups section in order: a public task, a private task, or a plain note
+    for (const line of sections['Follow-ups']) {
+      const hiddenTask = isPublic(line) ? null : untaggedTask(line);
+      const task = V.parseTask(line, me);
+      if (hiddenTask) rows.push({ hiddenTask });
+      else if (task && SLUG_RE.test(task.person)) rows.push({ task: line });
+      else if (clean(line)) rows.push({ note: clean(line) });
+    }
+    const tasks = rows.filter((r) => r.task).map((r) => r.task);
+    // A private task never makes a people page and is never named in a reply.
     const names = [...new Set(tasks.filter(isPublic).map((l) => V.parseTask(l, me).person))].filter((p) => !me.has(p));
     const peopleKnown = new Set(read.pages.filter((p) => p.rel.startsWith('people/')).map((p) => path.basename(p.rel, '.md')));
     for (const name of names) {
@@ -430,15 +465,34 @@ function accept(args) {
       }
     }
     const newPeople = names.filter((n) => !peopleKnown.has(n));
-    // The build stops on a task line naming someone with no page. So a hidden task like that stays on the
-    // page as a plain private line, which the build and the board do not count, until that person has a page.
-    const canCount = (l) => {
-      const who = V.parseTask(l, me).person;
-      return isPublic(l) || me.has(who) || peopleKnown.has(who) || names.includes(who);
+    // The build stops on a task line naming someone with no page, and a new page would show the name in
+    // search. So a private task like that is filed as the person's own to-do, with the name in its hidden
+    // text. It stays tracked, and it does not depend on a page that may never come.
+    let filedAsOwn = 0;
+    const privateTask = (bare) => {
+      const m = V.matchTask(bare);
+      if (me.has(m.person) || peopleKnown.has(m.person) || names.includes(m.person)) return privateForm(m);
+      filedAsOwn += 1;
+      const lead = m.owner === 'theirs' ? `Waiting on ${m.person}, who owes this:` : `Follow up with ${m.person}:`;
+      const line = privateForm({ ...m, person: 'me', owner: 'mine', text: `${lead} ${m.text.trim()}` });
+      if (!V.matchTask(line)) throw new UserError('A private task is too long to file. Shorten it. Nothing was filed.');
+      return line;
     };
-    const kept = tasks.filter(canCount);
-    const asNotes = tasks.filter((l) => !canCount(l)).map(clean);
-    const hiddenCount = tasks.length - tasks.filter(isPublic).length;
+    const followupLines = rows.map((r) => (r.task || (r.hiddenTask ? privateTask(r.hiddenTask) : `- ${r.note}`)));
+    // A private section keeps its tasks as tasks, in the same section. Its other lines become plain text.
+    const capable = V.taskCapableFlags(split.hidden);
+    let plainTasks = 0;
+    const privateLines = split.hidden.flatMap((line, i) => {
+      const bare = untaggedTask(line);
+      if (bare && capable[i]) return [privateTask(bare)];
+      if (bare) plainTasks += 1;
+      return clean(line) ? [`- ${clean(line)}`] : [];
+    });
+    const hiddenTasks = [...followupLines, ...privateLines].filter((l) => !isPublic(l) && V.parseTask(l, me));
+    const hiddenCount = hiddenTasks.filter((l) => !V.parseTask(l, me).closed).length;
+    const looksLikeTask = (l) => Boolean(untaggedTask(l));
+    const elsewhere = [...proposal.before, ...sections.Summary, ...sections.Decisions, ...sections['Open questions'], ...proposal.others.flatMap((o) => o.lines)];
+    plainTasks += rows.filter((r) => r.note).length + elsewhere.filter(looksLikeTask).length;
 
     // A private title or summary line must not reach the page header. The line itself stays in the body, still tagged.
     const title = (isPublic(proposal.name) && clean(proposal.name)) || id;
@@ -450,11 +504,11 @@ function accept(args) {
     if (bullets(proposal.before).length) body.push('## Notes', '', ...bullets(proposal.before), '');
     body.push('## What happened', '', ...(summaryLines.length ? summaryLines : [`${title}, saved from a chat.`]), '');
     if (bullets(sections.Decisions).length) body.push('## Decisions', '', ...bullets(sections.Decisions), '');
-    if (tasks.length || otherFollowups.length) body.push('## Follow-ups', '', ...kept, ...[...asNotes, ...otherFollowups].map((l) => `- ${l}`), '');
+    if (followupLines.length) body.push('## Follow-ups', '', ...followupLines, '');
     if (bullets(sections['Open questions']).length) body.push('## Open / next', '', ...bullets(sections['Open questions']), '');
     // Other sections carry across as plain text: their lines cannot become tasks or end a section.
     for (const other of proposal.others) body.push(`## ${clean(other.name) || 'Notes'}`, '', ...bullets(other.lines), '');
-    if (bullets(split.hidden).length) body.push('## Private', '', ...bullets(split.hidden), '');
+    if (privateLines.length) body.push('## Private', '', ...privateLines, '');
 
     // Everything is checked. Add the people, keep a copy of the proposal under sources/, write the page, and
     // only then take the proposal out of the inbox. Any failure on the way undoes the steps before it.
@@ -486,9 +540,10 @@ function accept(args) {
     recordWrite();
     const extras = newPeople.length ? ` New person page(s): ${newPeople.map((n) => `people/${n}.md`).join(', ')}.` : '';
     const counted = tasks.filter(isPublic).filter(V.isOpenFollowup).length;
-    const privateNote = hiddenCount ? ` ${hiddenCount} private item(s) stay on the page and are not named here.` : '';
-    const notCounted = asNotes.length ? ` ${asNotes.length} of them name(s) someone with no page, so those lines are plain private notes and do not count as follow-ups until that person has a page.` : '';
-    return `Filed "${title}" as ${base}/${stem}.md (id ${idFor(stem)}). ${counted} follow-up(s) now count on your card and board.${privateNote}${notCounted}${extras} The saved proposal moved to ${sourceRel}.`;
+    const privateNote = hiddenCount ? ` ${hiddenCount} private item(s) are tracked as well: they count on your board, your card shows only how many, and they are not named here.` : '';
+    const ownNote = filedAsOwn ? ` ${filedAsOwn} private item(s) named someone with no page, so they were filed as your own private to-do(s), with the name inside the hidden line, and no page was made.` : '';
+    const plainNote = plainTasks ? ` ${plainTasks} line(s) were not written as tasks in the Follow-ups or Private sections, so they were filed as plain notes and are not tracked.` : '';
+    return `Filed "${title}" as ${base}/${stem}.md (id ${idFor(stem)}). ${counted} follow-up(s) now count on your card and board.${privateNote}${ownNote}${plainNote}${extras} The saved proposal moved to ${sourceRel}.`;
   }));
 }
 

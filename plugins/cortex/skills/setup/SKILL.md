@@ -24,7 +24,7 @@ If `config.json` exists but cannot be used (it is not valid JSON, it is not an o
 
 If `config.json` names a folder that exists but has no `kit.yaml`, do not interview. Show the folder's path and what is in it, with `ls -A`. Say a cortex made from the Chat tab or an older setup may look like this. Ask which they want: repair it there (build around what is there, removing nothing), point `config.json` at another folder, or start again in a new empty folder. Do not change the folder or the file without a yes.
 
-If there is no `config.json` but `~/cortex` has files in it, do not start the interview either. Show what is in it and ask whether it is their cortex. If it has a `kit.yaml`, offer to write `config.json` pointing at it, and then treat it as an existing cortex, as above.
+If there is no `config.json` but `~/cortex` has files in it, do not start the interview either. Show what is in it and ask whether it is their cortex. If it has a `kit.yaml`, offer to write `config.json` pointing at it, and then treat it as an existing cortex, as above. If it has no `kit.yaml` and they say it is not theirs, leave that folder alone: never change, move or delete anything in it. Go on to the interview, and at the folder question offer only a different folder name, such as `~/my-cortex`, not `~/cortex`.
 
 Never replace an existing `config.json` or folder silently. Only when all of these checks find nothing, go on to the interview below.
 

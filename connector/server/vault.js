@@ -534,8 +534,8 @@ function opensFence(m, inList) {
   return !(m.groups.fence[0] === '`' && m.groups.rest.includes('`')) && (expandedLength(m.groups.indent) < 4 || inList);
 }
 
-// The lines that can hold a task: outside fenced code blocks, by the same rules as scan_body.
-function taskCapableLines(lines) {
+// For each line, whether it can hold a task: outside fenced code blocks, by the same rules as scan_body.
+function taskCapableFlags(lines) {
   const out = [];
   let fence = '';
   let inList = false;
@@ -543,19 +543,26 @@ function taskCapableLines(lines) {
     const m = FENCE_RE.exec(line);
     if (fence) {
       if (m && m.groups.fence[0] === fence[0] && m.groups.fence.length >= fence.length && !m.groups.rest.trim()) fence = '';
+      out.push(false);
       continue;
     }
     if (m && opensFence(m, inList)) {
       fence = m.groups.fence;
+      out.push(false);
       continue;
     }
     if (line.trim()) {
       if (LIST_ITEM_RE.test(line)) inList = true;
       else if (expandedLength(line) < 2) inList = false;
     }
-    out.push(line);
+    out.push(true);
   }
   return out;
+}
+
+function taskCapableLines(lines) {
+  const flags = taskCapableFlags(lines);
+  return lines.filter((_, i) => flags[i]);
 }
 
 function followups(pages, me) {
@@ -657,5 +664,5 @@ function parseProposal(text) {
 module.exports = {
   UserError, GENERATED, MAX_FILE_BYTES, PRIVATE_TAG, PROPOSAL_NOTE, cmp, localDate, slugify, plainLetters, plainSlug, neutralise, vaultLocation, vaultSource,
   folderReason, configPointsNowhere, requireVault, isInside, isGenerated, readText, parseValue, publicPage, publicText, withoutPrivateSections,
-  walk, get, parseKit, selfSlugs, parseTask, followups, overlongTasks, inboxFiles, parseProposal, isOpenFollowup, SLUG_RE,
+  walk, get, parseKit, selfSlugs, matchTask, parseTask, taskCapableFlags, followups, overlongTasks, inboxFiles, parseProposal, isOpenFollowup, SLUG_RE,
 };

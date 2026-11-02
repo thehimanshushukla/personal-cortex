@@ -158,8 +158,10 @@ function cortexInbox() {
       const proposal = V.parseProposal(V.publicText(text).text);
       if (proposal) {
         const count = proposal.sections['Follow-ups'].filter(V.isOpenFollowup).length;
+        const { withheld } = V.publicText(text);
+        const hidden = withheld ? `, ${withheld} private part(s) not shown` : '';
         const saved = /^\d{4}-\d{2}-\d{2}$/.test(proposal.saved) ? proposal.saved : 'earlier';
-        rows.push(`- ${id}: "${clipChars(proposal.name, SNIPPET_CHARS) || id}" - saved from chat ${saved}, ${count} to-do(s) and follow-up(s). Can be accepted here.`);
+        rows.push(`- ${id}: "${clipChars(proposal.name, SNIPPET_CHARS) || id}" - saved from chat ${saved}, ${count} to-do(s) and follow-up(s)${hidden}. Can be accepted here.`);
       } else {
         const page = V.publicPage(`inbox/${file}`, text);
         rows.push(`- ${id}: "${get(page, 'title') || id}" - imported note. Filed from the sorting desk in the Code tab.`);
@@ -175,7 +177,7 @@ function cortexInbox() {
 // ---------------------------------------------------------------- the list the app sees
 
 const FOLLOWUP_FIELDS = {
-  what: { type: 'string', description: 'What needs doing, in one short line.' },
+  what: { type: 'string', description: 'What needs doing, in one short line. Add {private} to keep it out of chat.' },
   person: { type: 'string', description: 'Who it is with, like Alex Rivera. Leave out for the person\'s own to-do.' },
   due: { type: 'string', description: 'Due date, YYYY-MM-DD. Optional.' },
   owner: { type: 'string', enum: ['mine', 'theirs'], description: 'mine = you owe it. theirs = they owe it to you.' },

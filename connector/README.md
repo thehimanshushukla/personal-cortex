@@ -82,13 +82,13 @@ Two markings hide text from every chat tool: the card, search, opening a page an
   - These do not open one: `## Private equity deals`, `## Notes {private}`, `##Private` or `#private` (no space), `Private school fees are due.` above `---`, a heading indented 4 or more spaces outside a list, and anything inside a code fence that closes.
 - **A private line:** any line with `{private}` on it, anywhere, is hidden on its own. It does not hide the lines after it. In a page's header, the value shows as `(private)`.
 
-**Where a section ends.** Only at an unindented `#` heading of the same or a higher level, outside code fences, `<pre>` blocks, other raw HTML blocks (`script`, `style`, `textarea`) and comments. An underlined or indented heading does not end it. A fence, block or comment left unclosed inside a section hides the rest of the page.
+**Where a section ends.** Only at an unindented `#` heading of the same or a higher level, outside code fences, `<pre>` blocks, other raw HTML blocks (`script`, `style`, `textarea`) and comments. An underlined or indented heading does not end it. A fence, block or comment left unclosed inside a section hides the rest of the page. A stray fence opened earlier on the page and closed inside what looks like a private section shields that heading, so the heading opens nothing and the text stays visible.
 
 **What is guaranteed.** Everything from an opening heading to the end described above is withheld from every chat tool, and so is every tagged line. A heading that does not meet the rule above hides nothing, so text under it stays visible.
 
 **The numbers.** `cortex.py` and the board do not hide anything, so they count private to-dos and follow-ups. When hidden items change a count, the chat card says so in one line, such as "1 private item not shown".
 
-**Filing.** A task tagged `{private}` never makes a people page and is never named in a reply. Its line stays on the filed page. If it names someone with no page yet, it stays as a plain private line that does not count as a follow-up, because the build stops on a task naming someone unknown.
+**Filing.** A private task, whether tagged `{private}` or under a `## Private` section, stays a real, tracked task on the filed page, in the same section. It never makes a people page and is never named in a reply. The tag can be written anywhere on the line. It is filed as `- [ ] @person what {private} (due D) (added D) {mine}`, because the dates must sit right before the owner. If it names someone with no page, a page would show the name in search, and the build stops on a task naming someone unknown. So it is filed as your own private to-do, such as `- [ ] @me Follow up with alex-rivera: send the contract {private} (due D) {mine}`, or `Waiting on alex-rivera, who owes this:` if they owe it. The reply says how many were filed this way.
 
 Be clear about the limits:
 

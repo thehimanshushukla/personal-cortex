@@ -1279,7 +1279,7 @@ def test_hand_edited_proposal_carries_all_its_text_and_keeps_private_hidden(env,
         assert words in raw, words
     assert raw.count("SECRETWORD") == 4  # all carried across, none lost
     assert "Waiting to be filed" not in raw  # the proposal's own note is not the person's text
-    assert "- [ ] @me not a task here" not in raw and "- [ ] @me SECRETWORD" not in raw
+    assert "- [ ] @me not a task here" not in raw and "- [ ] @me SECRETWORD deep {private}" in raw
     build(env)
     page = server.ok("cortex_page", id=f"session-acme-{DAY}-chat-edited")
     assert "SECRETWORD" not in page and "Edited" not in page and "Public summary." in page
@@ -1484,12 +1484,14 @@ def test_a_tagged_task_naming_someone_unknown_is_never_named_or_given_a_page(env
     reply = server.ok("cortex_accept", id="chat-tagged", area="acme")
     assert "dr-secret-name" not in reply
     assert "1 follow-up(s) now count" in reply and "1 private item(s)" in reply and "no page" in reply
+    assert "until that person" not in reply
     assert not (v / "people" / "dr-secret-name.md").exists() and (v / "people" / "sam-lee.md").exists()
     filed = (v / "acme" / "sessions" / f"{DAY}-tagged.md").read_text()
-    assert "@dr-secret-name pay {private}" in filed
+    assert "- [ ] @me Waiting on dr-secret-name, who owes this: pay {private} {mine}" in filed
     assert "Nothing found" in server.ok("cortex_search", query="dr-secret-name")
     assert "Build OK" in build(env)
     assert "Follow-ups (4 open)" in py(env, "card").stdout and "Follow-ups (4 open)" in server.ok("cortex_card")
+    assert "1 private item not shown." in server.ok("cortex_card")
 
 
 def test_a_tagged_task_naming_a_known_person_stays_a_task_and_the_card_says_so(env, server):
@@ -1502,6 +1504,192 @@ def test_a_tagged_task_naming_a_known_person_stays_a_task_and_the_card_says_so(e
     assert "Follow-ups (4 open)" in py(env, "card").stdout
     card = server.ok("cortex_card")
     assert "Follow-ups (3 open)" in card and "1 private item not shown." in card
+
+
+# A private task stays a real task, whatever its form, and all the readers agree on it
+def open_counts(env, server):
+    """Open items on cortex.py's card, on the chat card, hidden from the chat card, and on the board."""
+    card = py(env, "card")
+    assert card.returncode == 0, card.stderr
+    def seen(text, label):
+        m = re.search(rf"{label} \((\d+) open\)", text)
+        return int(m.group(1)) if m else 0
+    engine = seen(card.stdout, "To-dos") + seen(card.stdout, "Follow-ups")
+    chat_text = server.ok("cortex_card")
+    chat = seen(chat_text, "To-dos") + seen(chat_text, "Follow-ups")
+    m = re.search(r"(\d+) private items? not shown", chat_text)
+    return engine, chat, int(m.group(1)) if m else 0, len(B.Board(env["vault"]).state()["items"])
+
+
+def board_task_texts(env):
+    return {i["text"] for i in B.Board(env["vault"]).state()["items"]}
+
+
+def filed_page(env, stem):
+    return (env["vault"] / "acme" / "sessions" / f"{DAY}-{stem}.md").read_text()
+
+
+def hidden_everywhere(env, server, word, page_id):
+    assert word not in server.ok("cortex_card")
+    assert "Nothing found" in server.ok("cortex_search", query=word)
+    assert word not in server.ok("cortex_page", id=page_id)
+
+
+def proposal(env, name, follow="", private=""):
+    text = f"source: chat\nstatus: proposed\nname: {name}\nsaved: {DAY}\n\n## Summary\n\nS\n\n## Follow-ups\n\n{follow}"
+    if private:
+        text += f"\n## Private\n\n{private}"
+    (env["vault"] / "inbox" / f"chat-{name.lower()}.md").write_text(text)
+
+
+@pytest.mark.parametrize("what", [
+    "send Dana the salary letter {private}", "{private} send Dana the salary letter", "send Dana {PRIVATE} the salary letter",
+    "send Dana the salary letter { Private }", "send Dana the salary letter {pri\u200bvate}"])
+def test_todo_add_keeps_private_in_any_position_and_case(env, server, what):
+    seed(env)
+    base = open_counts(env, server)
+    reply = server.ok("cortex_todo_add", what=what, person="Dana Cole", owner="mine", due="2026-01-01")
+    assert "Dana" not in reply and "dana" not in reply and "1 private item" in reply
+    reply = server.ok("cortex_accept", id="chat-todos", area="acme")
+    assert "dana" not in reply.lower() and "0 follow-up(s) now count" in reply and "1 private item(s) are tracked" in reply
+    assert "1 private item(s) named someone with no page" in reply
+    assert not (env["vault"] / "people" / "dana-cole.md").exists()
+    filed = filed_page(env, "to-dos-added-from-chat")
+    assert f"- [ ] @me Follow up with dana-cole: send Dana the salary letter {{private}} (due 2026-01-01) (added {DAY}) {{mine}}" in filed
+    assert "letter private" not in filed
+    assert "Build OK" in build(env)
+    hidden_everywhere(env, server, "salary", f"session-acme-{DAY}-to-dos-added-from-chat")
+    hidden_everywhere(env, server, "dana", f"session-acme-{DAY}-to-dos-added-from-chat")
+    engine, chat, hidden, board = open_counts(env, server)
+    assert engine == base[0] + 1 and chat == base[1] and hidden == 1 and board == base[3] + 1
+
+
+def test_a_tag_in_another_field_counts_and_a_bare_tag_is_not_words(env, server):
+    seed(env)
+    server.ok("cortex_todo_add", what="pay the deposit", person="Alex Rivera {private}", owner="mine")
+    server.ok("cortex_todo_add", what="pay the rent", due="2026-01-01 {PRIVATE}", owner="mine")
+    assert "needs some words" in server.refused("cortex_todo_add", what=" {private} ", owner="mine")
+    inbox = (env["vault"] / "inbox" / "chat-todos.md").read_text()
+    assert f"- [ ] @alex-rivera pay the deposit {{private}} (added {DAY}) {{mine}}" in inbox
+    assert f"- [ ] @me pay the rent {{private}} (due 2026-01-01) (added {DAY}) {{mine}}" in inbox
+    assert "2 private part(s) not shown" in server.ok("cortex_inbox")
+
+
+def test_save_chat_keeps_private_on_a_follow_up(env, server):
+    seed(env)
+    reply = server.ok("cortex_save_chat", title="Pay talk", summary="S", followups=[
+        {"what": "send Alex the raise letter {private}", "person": "Alex Rivera", "owner": "theirs", "due": "2026-01-01"}])
+    assert "raise" not in reply
+    server.ok("cortex_accept", id=f"chat-{DAY}-pay-talk", area="acme")
+    filed = filed_page(env, "pay-talk")
+    assert f"- [ ] @alex-rivera send Alex the raise letter {{private}} (due 2026-01-01) (added {DAY}) {{theirs}}" in filed
+    assert "Build OK" in build(env)
+    hidden_everywhere(env, server, "raise", f"session-acme-{DAY}-pay-talk")
+    assert "1 private item not shown." in server.ok("cortex_card")
+
+
+@pytest.mark.parametrize("line", [
+    "- [ ] @me pay landlord {mine} {private}", "- [ ] @me pay landlord {private} {mine}", "- [ ] @me pay landlord {mine} {PRIVATE}",
+    "{private} - [ ] @me pay landlord {mine}", "- [ ] {private} @me pay landlord {mine}", "- [ ] @me {private} pay landlord {mine}"])
+def test_a_tag_in_any_order_on_your_own_to_do_stays_a_task(env, server, line):
+    seed(env)
+    base = open_counts(env, server)
+    proposal(env, "Order", line + "\n")
+    reply = server.ok("cortex_accept", id="chat-order", area="acme")
+    assert "1 private item(s) are tracked" in reply and "plain notes" not in reply and "no page" not in reply
+    assert "- [ ] @me pay landlord {private} {mine}" in filed_page(env, "order")
+    assert "Build OK" in build(env)
+    hidden_everywhere(env, server, "landlord", f"session-acme-{DAY}-order")
+    engine, chat, hidden, board = open_counts(env, server)
+    assert engine == base[0] + 1 and chat == base[1] and hidden == 1 and board == base[3] + 1
+
+
+def test_a_due_date_survives_a_tag_written_after_it(env, server):
+    seed(env)
+    proposal(env, "Dated", "- [ ] @me pay rent (due 2020-01-01) {private} {mine}\n- [ ] @alex-rivera sign it (due 2020-02-02) (added 2020-01-01) {mine} {private} {doing}\n")
+    server.ok("cortex_accept", id="chat-dated", area="acme")
+    filed = filed_page(env, "dated")
+    assert "- [ ] @me pay rent {private} (due 2020-01-01) {mine}" in filed
+    assert "- [ ] @alex-rivera sign it {private} (due 2020-02-02) (added 2020-01-01) {mine} {doing}" in filed
+    tasks = {t["text"]: t for t in (B.C.parse_task(l) for l in filed.split("\n")) if t}
+    assert tasks["pay rent {private}"]["due"] == "2020-01-01" and tasks["sign it {private}"]["doing"]
+    assert "Build OK" in build(env)
+
+
+def test_a_private_task_naming_no_page_is_tracked_and_comes_back_never_as_a_plain_bullet(env, server):
+    seed(env)
+    base = open_counts(env, server)
+    proposal(env, "Ghost", "- [ ] @ghost-person send the contract (due 2020-03-03) {theirs} {private}\n- [x] @old-ghost closed one {private} {mine}\n")
+    reply = server.ok("cortex_accept", id="chat-ghost", area="acme")
+    assert "ghost-person" not in reply and "old-ghost" not in reply and "2 private item(s) named someone with no page" in reply
+    filed = filed_page(env, "ghost")
+    assert "- [ ] @me Waiting on ghost-person, who owes this: send the contract {private} (due 2020-03-03) {mine}" in filed
+    assert "- [x] @me Follow up with old-ghost: closed one {private} {mine}" in filed
+    assert "\n- @ghost" not in filed and "\n- @old" not in filed
+    assert not list((env["vault"] / "people").glob("*ghost*"))
+    assert "Build OK" in build(env)
+    engine, chat, hidden, board = open_counts(env, server)
+    assert engine == base[0] + 1 and chat == base[1] and hidden == 1 and board == base[3] + 1
+    task = next(B.C.parse_task(l) for l in filed.split("\n") if "ghost-person" in l)
+    assert task["due"] == "2020-03-03" and task["owner"] == "mine" and task["person"] == "me"
+
+
+def test_a_public_task_naming_the_same_person_makes_the_page_and_the_private_one_keeps_them(env, server):
+    seed(env)
+    proposal(env, "Both", "- [ ] @sam-lee hello {theirs}\n- [ ] @sam-lee quiet thing {private} {mine}\n")
+    reply = server.ok("cortex_accept", id="chat-both", area="acme")
+    assert "people/sam-lee.md" in reply and "no page" not in reply
+    assert "- [ ] @sam-lee quiet thing {private} {mine}" in filed_page(env, "both")
+    assert "Build OK" in build(env)
+
+
+def test_tasks_under_a_private_section_stay_tasks_in_that_section(env, server):
+    seed(env)
+    base = open_counts(env, server)
+    proposal(env, "Section", private=(
+        "A plain hidden note.\n- [ ] @me file taxes {mine}\n- [ ] @alex-rivera review {mine} {private}\n- [ ] @hidden-name owes me (due 2020-04-04) {theirs}\n"
+        "```\n- [ ] @me fenced words {mine}\n```\n"))
+    reply = server.ok("cortex_accept", id="chat-section", area="acme")
+    assert "hidden-name" not in reply and "alex" not in reply.lower()
+    assert "3 private item(s) are tracked" in reply and "1 private item(s) named someone" in reply and "1 line(s) were not written as tasks" in reply
+    assert not (env["vault"] / "people" / "hidden-name.md").exists()
+    filed = filed_page(env, "section")
+    private = filed[filed.index("## Private"):]
+    assert "- [ ] @me file taxes {private} {mine}" in private
+    assert "- [ ] @alex-rivera review {private} {mine}" in private
+    assert "- [ ] @me Waiting on hidden-name, who owes this: owes me {private} (due 2020-04-04) {mine}" in private
+    assert "- A plain hidden note." in private and "- [ ] @me fenced" not in private and "@me fenced words" in private
+    assert "taxes" not in filed[:filed.index("## Private")]
+    assert "Build OK" in build(env)
+    for word in ("taxes", "hidden-name", "plain hidden"):
+        hidden_everywhere(env, server, word, f"session-acme-{DAY}-section")
+    engine, chat, hidden, board = open_counts(env, server)
+    assert engine == base[0] + 3 and chat == base[1] and hidden == 3 and board == base[3] + 3
+
+
+def test_the_board_counts_filed_private_tasks_like_the_engine(env, server):
+    seed(env)
+    proposal(env, "Board", "- [ ] @ghost-person board promise {private} {mine}\n- [ ] @me board rent {mine} {private}\n")
+    server.ok("cortex_accept", id="chat-board", area="acme")
+    assert "Build OK" in build(env)
+    cards = board_task_texts(env)
+    assert "Follow up with ghost-person: board promise {private}" in cards and "board rent {private}" in cards
+
+
+def test_a_non_task_line_is_reported_not_silently_flattened(env, server):
+    seed(env)
+    proposal(env, "Plain", "- call the bank\n- [ ] @me no owner here\n")
+    reply = server.ok("cortex_accept", id="chat-plain", area="acme")
+    assert "2 line(s) were not written as tasks" in reply and "not tracked" in reply
+
+
+def test_readme_and_setup_skill_say_the_new_rules():
+    readme = (CONNECTOR / "README.md").read_text()
+    part = readme[readme.index("## What counts as private"):readme.index("## How saving stays safe")]
+    assert "until that person" not in part and "plain private line" not in part
+    assert "stray fence" in part and "own private to-do" in part
+    skill = (PLUGIN / "skills" / "setup" / "SKILL.md").read_text()
+    assert "different folder name" in skill and "never change, move or delete anything in it" in skill
 
 
 # Item 3: nothing ends a private section early
