@@ -373,15 +373,18 @@ class Board:
         out = {"desk": [], "notes": [], "loose": [], "unsaved": [], "git": (v / ".git").exists(),
                "missed": [], "missed_note": ""}
         try:
-            report = G.inventory(v, days=30, budget=GARDENER_SECONDS) if self.gardener else {"missed": [], "warning": "", "not_finished": 0}
+            report = G.inventory(v, days=30, budget=GARDENER_SECONDS) if self.gardener else {"missed": [], "warning": "", "not_finished": 0, "other_folders": 0}
             for r in report["missed"]:
                 iid, prompt = make_id("inbox", "missed", r["id"]), missed_prompt(r, v)
                 self.ids[iid] = ("missed", r["id"], prompt)
                 out["missed"].append({"id": iid, "date": r["date"], "folder": r["folder"], "title": r["title"],
-                                      "users": r["users"], "source": r["source"], "prompt": prompt})
+                                      "users": r["users"], "source": r["source"], "prompt": prompt,
+                                      "continued": r["continued"]})
             notes = [report["warning"]] if report["warning"] else []
             if report["not_finished"]:
                 notes.append(f"Still reading {report['not_finished']} session file(s): refresh in a moment.")
+            if report["other_folders"]:
+                notes.append(G.elsewhere_line(report["other_folders"]))
             out["missed_note"] = " ".join(notes)
         except Exception as e:  # the rest of the Inbox still works
             problems.append(f"could not check for unlogged sessions ({e}).")

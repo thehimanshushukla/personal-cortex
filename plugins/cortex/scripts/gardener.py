@@ -15,6 +15,7 @@ the start hook reads). The only thing written into the vault is the weekly journ
 """
 from __future__ import annotations
 
+import collections
 import datetime as dt
 import fcntl
 import json
@@ -32,9 +33,11 @@ import cortex as C  # noqa: E402
 
 OVERLAP_DAYS = 2            # the window always reaches this much further back, so an edge session is not lost
 LOOKBACK_DAYS = 32          # how far back a session can still be missed (Claude Code's default is 30 days)
+MAX_DAYS = LOOKBACK_DAYS - OVERLAP_DAYS   # the most --days can honestly promise
 WARN_DAYS = 21              # warn when an unlogged session is this old
 FRESH_SECONDS = 600         # a file changed in the last 10 minutes may be a chat still going
 MIN_USER_MESSAGES = 3
+CONTINUED_MESSAGES = 10     # this many typed messages after a session was logged make it worth listing again
 TITLE_CHARS = 80
 READ_CHARS = 2000           # titles are cut from this much of the first request
 MENTION_CHARS = 20000
@@ -45,9 +48,13 @@ CLI_SECONDS = 60.0
 REFRESH_SECONDS = 120.0
 MAX_DISMISSED = 5000
 WEEK_IDS = 200              # ids the start hook checks; only a bound, far above any real week
-CACHE_VERSION = 1
+SUMMARY_VAULTS = 8          # the summary keeps this many vaults, the most recently counted
+METADATA_BYTES = 64 * 1024  # a metadata-only file is this small; anything bigger is reported as not understood
+METADATA_LINES = 20
+CACHE_VERSION = 2           # bumped when a row's meaning changes, so old rows and titles are read again
 AUTOMATION_MARK = "[CORTEX_AUTOMATION]"   # how the kit's own automated prompts start
 SCOPES = {"cortex", "all", "off"}
+SESSION_ENVS = ("CLAUDE_CODE_SESSION_ID", "CODEX_THREAD_ID")   # set inside a running session
 
 ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
 CODEX_ID_RE = re.compile(r"([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$")
@@ -57,6 +64,8 @@ NOT_TYPED = ("<", "[Request interrupted", "Caveat:", "This session is being cont
              "Base directory for this skill", "# AGENTS.md instructions")
 CLAUDE_TYPES = {"user", "assistant", "summary", "system", "attachment", "progress"}
 CODEX_TYPES = {"session_meta", "turn_context", "event_msg", "response_item", "compacted", "message"}
+# Lines in a file with none of these and a type of their own are bookkeeping, not a format we cannot read.
+TALK_KEYS = {"message", "content", "payload", "text", "role"}
 CHAT_NOTE = ("A plain Claude Chat cannot be seen here, because its conversations are not on this Mac. "
              "To keep one, say 'save this chat' in that chat (it needs the Cortex extension for the Chat tab).")
 
@@ -72,17 +81,34 @@ def state_dir() -> Path:
     return d
 
 
+def read_regular(path: Path, limit: int = -1) -> bytes:
+    """A plain file's bytes. O_NONBLOCK and O_NOFOLLOW: a pipe or a link in its place cannot hang the read."""
+    fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW)
+    with os.fdopen(fd, "rb") as fh:
+        if not stat.S_ISREG(os.fstat(fh.fileno()).st_mode):
+            raise OSError("not a plain file")
+        return fh.read(limit)
+
+
 def read_json(path: Path, default):
     try:
-        out = json.loads(path.read_text(encoding="utf-8"))
+        out = json.loads(read_regular(path).decode("utf-8"))
         return out if isinstance(out, type(default)) else default
-    except (OSError, ValueError):
+    except (OSError, ValueError, RecursionError):
         return default
+
+
+def write_private(path: Path, text: str) -> None:
+    """Only this user can read what the Gardener keeps."""
+    C.write_atomic(path, text)
+    os.chmod(path, 0o600)
 
 
 # ---------------------------------------------------------------- titles
 
 # What looks like a secret, tried on the text before it is cut, so a cut can never leave half of one.
+_VALUE = r"""(?:"[^"]*"|'[^']*'|\S+)"""
+_KEYWORD = r"password|passwd|pwd|passphrase|secret|token|auth[-_]?key|api[-_ ]?key|access[-_ ]?key|private[-_ ]?key|credentials?"
 SECRET_RES = [
     re.compile(r"-----BEGIN [^-]{0,40}-----.*?(?:-----END [^-]{0,40}-----|$)", re.S),
     re.compile(r"\b(?:sk|pk|rk)[-_][A-Za-z0-9_-]{8,}"),
@@ -93,11 +119,28 @@ SECRET_RES = [
     re.compile(r"\bAIza[\w-]{20,}"),
     re.compile(r"\beyJ[\w-]{8,}\.[\w-]+(?:\.[\w-]+)?"),
     re.compile(r"(?i)\bbearer\s+[\w.~+/=-]{8,}"),
-    re.compile(r"(?i)\b(?:password|passwd|pwd|passphrase)\b\s*(?:is\b|=|:)?\s*\S+"),
-    re.compile(r"(?i)\b(?:secret|token|api[-_ ]?key|access[-_ ]?key|private[-_ ]?key|credentials?)\b\s*(?:is\b|=|:)\s*\S+"),
+    # A name that holds a keyword, then a value: DB_PASSWORD=x, CLIENT_SECRET: x, "api_key": "x", my token is x.
+    re.compile(r"(?i)[\w.-]{0,64}(?:" + _KEYWORD + r")[\w.-]{0,64}[\"']?\s*(?:\bis\b|=|:)\s*" + _VALUE),
+    re.compile(r"(?i)(?<![A-Za-z0-9])(?:password|passwd|pwd|passphrase)\b\s*" + _VALUE),
+    re.compile(r"(?i)(?<![A-Za-z0-9])pass[\"']?\s*[:=]\s*" + _VALUE),
+    re.compile(r"(?i)(?<!\S)--[\w-]{0,40}(?:password|passwd|token|secret|api-?key)[\w-]{0,40}\s+\S+"),
+    re.compile(r"(?<!\S)(?:-u|--user)[ =]?\S+:\S+"),
     re.compile(r"(?<=://)[^/\s:@]+:[^/\s@]+(?=@)"),
+    re.compile(r"[\w.+-]{1,64}@[\w-]+(?:\.[\w-]+)+"),                             # an email address
+    re.compile(r"(?<!\d)\d{3}-\d{2}-\d{4}(?!\d)"),                                 # a US social security number
+    re.compile(r"(?i)(?<![a-z0-9])[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}(?![a-z0-9])"),
+    re.compile(r"(?<![A-Za-z0-9])[0-9a-fA-F]{16,}(?![A-Za-z0-9])"),                  # long hex
     re.compile(r"\b\d(?:[ -]?\d){12,18}\b"),
 ]
+# These say a whole line of credentials follows, and it has no clear end, so nothing of the title is kept.
+WHOLE_TITLE_RE = re.compile(r"""(?ix)
+    (?<![a-z0-9-]) (?:set-)? cookie ["']? \s* [:=]
+  | (?<![a-z0-9-]) (?:proxy-)? authorization ["']? \s* [:=]
+  | (?<![a-z0-9-]) x-(?:api|auth)-[\w-]{0,40} ["']? \s* :
+  | -----BEGIN \s
+""")
+HIDDEN_TITLE = "(title hidden)"
+SHELL_RE = re.compile(r"\$\([^()]*\)|\$\{[^{}]*\}")
 LONG_TOKEN_RE = re.compile(r"[A-Za-z0-9_+=/-]{32,}")
 MIXED_TOKEN_RE = re.compile(r"\b(?=[A-Za-z0-9]*\d)(?=[A-Za-z0-9]*[A-Za-z])[A-Za-z0-9]{20,}\b")
 TAG_RE = re.compile(r"</?[A-Za-z_!?][^<>]{0,200}>")
@@ -105,21 +148,34 @@ CONTROL_RE = re.compile(r"[\x00-\x1f\x7f-\x9f​-‏ -‮⁠-⁯﻿]+")
 
 
 def _hide_long(m: re.Match) -> str:
-    """A long unbroken run with a digit in it reads as a key; a long path or hyphenated name stays."""
-    s = m.group(0)
-    if not re.search(r"\d", s) or s.count("/") >= 3:
-        return s
-    return "[hidden]"
+    """A long unbroken run with a digit in it reads as a key, slashes or not. Without a digit it stays."""
+    return "[hidden]" if re.search(r"\d", m.group(0)) else m.group(0)
 
 
-def clean_title(text, limit: int = TITLE_CHARS) -> str:
-    """One short plain line: no line breaks, no markup that could read as a tag, nothing like a secret."""
+def _no_shell(s: str) -> str:
+    """A title may end up inside a command, so nothing in it may be able to run as one."""
+    for _ in range(8):      # nested $( $( ) ) comes off from the inside
+        s, n = SHELL_RE.subn(" ", s)
+        if not n:
+            break
+    return s.replace("$(", " ").replace("${", " ").replace("`", " ")
+
+
+def clean_title(text, limit: int = TITLE_CHARS, is_path: bool = False) -> str:
+    """One short plain line: no line breaks, no markup that could read as a tag, nothing that could run
+    as a command, nothing like a secret. In doubt the whole title goes. A folder path comes from the tool,
+    not from typing, so a long path with a digit in it stays readable."""
     s = CONTROL_RE.sub(" ", str(text)[:READ_CHARS])
-    s = TAG_RE.sub(" ", s).replace("<", " ").replace(">", " ").replace("`", "'")
+    s = _no_shell(TAG_RE.sub(" ", s).replace("<", " ").replace(">", " "))
+    if WHOLE_TITLE_RE.search(s):
+        return HIDDEN_TITLE
     for rx in SECRET_RES:
         s = rx.sub("[hidden]", s)
-    s = LONG_TOKEN_RE.sub(_hide_long, s)
+    if not is_path:
+        s = LONG_TOKEN_RE.sub(_hide_long, s)
     s = MIXED_TOKEN_RE.sub("[hidden]", s)
+    if s.count("[hidden]") >= 2:
+        return HIDDEN_TITLE
     s = " ".join(s.split())
     if len(s) > limit:
         s = s[:limit - 3].rstrip() + "..."
@@ -178,6 +234,17 @@ class Reader:
         self.cwd = ""
         self.in_vault = self.touched = False
         self.subagent = False
+        self.sdk = self.person = False       # which entrypoints the lines name (Claude Code)
+        self.meta_seen = self.exec = False   # the file's own first session_meta (Codex)
+        self.fork_of = ""                    # the session this one was forked from, when the file says
+        # When the last typed messages were sent, enough to tell if many came after a session was logged.
+        self.times = collections.deque(maxlen=CONTINUED_MESSAGES)
+        self.event_times = collections.deque(maxlen=CONTINUED_MESSAGES)
+
+    def note_time(self, times, value) -> None:
+        when = parse_time(value)
+        if when is not None:
+            times.append(int(when))
 
     def note_cwd(self, cwd) -> None:
         if not isinstance(cwd, str) or not cwd.startswith("/") or len(cwd) > 4096:
@@ -203,6 +270,12 @@ class Reader:
     def claude(self, e: dict) -> None:
         kind = e.get("type")
         self.known = self.known or kind in CLAUDE_TYPES
+        entry = e.get("entrypoint")
+        if isinstance(entry, str) and entry:   # any value but sdk-* is a person, known or not
+            self.sdk, self.person = self.sdk or entry.startswith("sdk-"), self.person or not entry.startswith("sdk-")
+        fork = e.get("forkedFrom")
+        if isinstance(fork, dict) and isinstance(fork.get("sessionId"), str):
+            self.fork_of = self.fork_of or fork["sessionId"]
         if kind == "assistant":
             content = (e.get("message") or {}).get("content") if isinstance(e.get("message"), dict) else None
             for b in content if isinstance(content, list) else []:
@@ -226,6 +299,7 @@ class Reader:
             self.users += 1
             self.first = self.first or text
             self.note_text(text)
+            self.note_time(self.times, e.get("timestamp"))
 
     def codex(self, e: dict) -> None:
         kind = e.get("type")
@@ -238,6 +312,11 @@ class Reader:
             src = p.get("source")
             if (isinstance(src, dict) and "subagent" in src) or src == "subagent":
                 self.subagent = True
+            if not self.meta_seen:      # a fork carries its parent's meta further down
+                self.meta_seen = True
+                self.exec = src == "exec" or p.get("originator") == "codex_exec"
+                if isinstance(p.get("forked_from_id"), str):
+                    self.fork_of = p["forked_from_id"]
         elif kind == "turn_context":
             self.note_cwd(p.get("cwd"))
         elif kind == "event_msg" and p.get("type") == "user_message":
@@ -246,6 +325,7 @@ class Reader:
                 self.events += 1
                 self.first_event = self.first_event or text
                 self.note_text(text)
+                self.note_time(self.event_times, e.get("timestamp"))
         elif kind == "response_item" or kind == "message":
             item = p if kind == "response_item" else e
             if item.get("type") == "message" and item.get("role") == "user":
@@ -254,6 +334,7 @@ class Reader:
                     self.users += 1
                     self.first = self.first or text
                     self.note_text(text)
+                    self.note_time(self.times, e.get("timestamp"))
             elif item.get("type") in ("function_call", "local_shell_call", "custom_tool_call"):
                 self.note_tool(item)
 
@@ -266,8 +347,11 @@ def read_lines(fh, deadline: float, out: dict):
         if not line:
             return
         total += len(line)
-        if total > MAX_FILE_BYTES or time.monotonic() > deadline:
+        if total > MAX_FILE_BYTES:
             out["truncated"] = True
+            return
+        if time.monotonic() > deadline:
+            out["truncated"] = out["clock_cut"] = True   # only this run's clock: worth reading again
             return
         ended = line.endswith(b"\n")
         if not too_long and (ended or len(line) < MAX_LINE):
@@ -278,47 +362,73 @@ def read_lines(fh, deadline: float, out: dict):
 def read_transcript(path: str, source: str, marks: list[str], deadline: float) -> dict | None:
     """What one transcript says, or None when it is gone or cannot be opened. Fails closed: no text but
     the title leaves this function."""
-    out = {"truncated": False}
+    out = {"truncated": False, "clock_cut": False}
     r = Reader(source, marks)
     needles = [b"user"] + [m.encode("utf-8", "ignore") for m in marks]
     any_line = False
+    bookkeeping, lines, size = True, 0, 0
     try:
         # O_NONBLOCK and O_NOFOLLOW: a pipe or a link named like a transcript cannot hang or redirect the read.
         fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW)
         with os.fdopen(fd, "rb") as fh:
             if not stat.S_ISREG(os.fstat(fh.fileno()).st_mode):
                 return None
+            size = os.fstat(fh.fileno()).st_size
             for n, raw in enumerate(read_lines(fh, deadline, out)):
                 if not raw.strip():
                     continue
                 any_line = True
+                lines += 1
                 # Reading JSON is the slow part, and most lines are tool output nobody needs here.
                 if n > 20 and not any(x in raw for x in needles):
                     continue
                 try:
                     e = json.loads(raw)
+                    bookkeeping = bookkeeping and _is_bookkeeping(e)
                     if isinstance(e, dict):
                         (r.claude if source == "claude" else r.codex)(e)
                 except (ValueError, TypeError, AttributeError, RecursionError):
+                    bookkeeping = False
                     continue    # one bad line never costs the rest of the file
     except OSError:
         return None
     users, first = (r.events, r.first_event) if r.events else (r.users, r.first)
+    times = r.event_times if r.events else r.times
     folder = _folder_name(r.cwd, path, source)
     kind = "session"
     if not any_line:
         kind = "unknown" if out["truncated"] else "empty"   # one endless line is not an empty file
     elif not r.known:
-        kind = "unknown"
+        small = not out["truncated"] and size <= METADATA_BYTES and lines <= METADATA_LINES
+        kind = "metadata" if bookkeeping and small else "unknown"
     elif r.subagent or (source == "claude" and r.side and not r.main):
         kind = "subagent"
-    elif first.startswith(AUTOMATION_MARK):
+    elif first.startswith(AUTOMATION_MARK) or r.exec or (r.sdk and not r.person):
         kind = "automated"
     elif out["truncated"] and users < MIN_USER_MESSAGES:
         kind = "unknown"
     return {"kind": kind, "users": users, "title": clean_title(first) if first else "",
             "first_time": r.first_time, "folder": folder, "in_vault": r.in_vault, "touched": r.touched,
-            "truncated": out["truncated"]}
+            "truncated": out["truncated"], "clock_cut": out["clock_cut"], "times": list(times), "fork_of": r.fork_of}
+
+
+def _is_bookkeeping(e) -> bool:
+    """A line such as custom-title or bridge-session: it names its own type and holds no conversation."""
+    return isinstance(e, dict) and isinstance(e.get("type"), str) and not TALK_KEYS & set(e)
+
+
+def good_row(hit, mtime, size) -> bool:
+    """A cache row is only used when it is for this exact file and every field has the right type."""
+    if not isinstance(hit, dict) or hit.get("mtime") != mtime or hit.get("size") != size:
+        return False
+    number = lambda v: type(v) in (int, float)  # noqa: E731
+    first, times = hit.get("first_time"), hit.get("times")
+    return (isinstance(hit.get("kind"), str) and type(hit.get("users")) is int
+            and isinstance(hit.get("title"), str) and isinstance(hit.get("folder"), str)
+            and isinstance(hit.get("fork_of"), str)
+            and all(type(hit.get(k)) is bool for k in ("in_vault", "touched", "truncated"))
+            and (first is None or (number(first) and 946684800 <= first <= 4102444800))
+            and isinstance(times, list) and all(number(t) for t in times))
 
 
 # ---------------------------------------------------------------- finding transcripts
@@ -365,19 +475,24 @@ def session_id(source: str, name: str) -> str | None:
 
 # ---------------------------------------------------------------- is it covered?
 
-def page_chat_ids(vault: Path) -> set[str]:
-    ids: set[str] = set()
+def page_chat_ids(vault: Path) -> dict[str, float]:
+    """Every chat id on a page, with when that page last changed."""
+    ids: dict[str, float] = {}
     for p in C.iter_pages(vault):
         v = p.meta.get("chat_id") if p.meta else None
         if v:
-            ids.update(str(x) for x in (v if isinstance(v, list) else [v]))
+            try:
+                when = (vault / p.rel).stat().st_mtime
+            except OSError:
+                when = 0
+            for x in v if isinstance(v, list) else [v]:
+                ids[str(x)] = max(ids.get(str(x), 0), when)
     return ids
 
 
 def wrote_pages(session_dir: Path, vault: Path) -> bool:
     try:
-        with (session_dir / "written.txt").open(encoding="utf-8", errors="ignore") as fh:
-            lines = fh.read(256 * 1024).splitlines()
+        lines = read_regular(session_dir / "written.txt", 256 * 1024).decode("utf-8", "ignore").splitlines()
     except OSError:
         return False
     root = str(vault) + os.sep
@@ -385,7 +500,7 @@ def wrote_pages(session_dir: Path, vault: Path) -> bool:
     return any(l.startswith(root) and l.endswith(".md") and not l.startswith(generated) for l in lines)
 
 
-def covered_by(sid: str, chat_ids: set[str], vault: Path) -> str:
+def covered_by(sid: str, chat_ids, vault: Path) -> str:
     d = home() / ".cortex" / "sessions" / sid
     if (d / "logged").exists():
         return "logged"
@@ -394,6 +509,24 @@ def covered_by(sid: str, chat_ids: set[str], vault: Path) -> str:
     if sid in chat_ids:
         return "page"
     return "wrote" if wrote_pages(d, vault) else ""
+
+
+def covered_at(sid: str, chat_ids: dict[str, float]) -> float:
+    """The last time this session reached the vault, from the flag, the ledger and its pages."""
+    d = home() / ".cortex" / "sessions" / sid
+    latest = chat_ids.get(sid, 0)
+    for name in ("logged", "written.txt"):
+        try:
+            latest = max(latest, (d / name).stat().st_mtime)
+        except OSError:
+            pass
+    return latest
+
+
+def continued_after(row: dict, when: float) -> bool:
+    """Were many messages typed after this time? The file's last few times are enough to say."""
+    times = row.get("times") or []
+    return bool(when) and len(times) >= CONTINUED_MESSAGES and times[-CONTINUED_MESSAGES] > when
 
 
 def scope_of(vault: Path) -> str:
@@ -437,21 +570,48 @@ def set_dismissed(sid: str, on: bool) -> None:
         else:
             items.pop(sid, None)
         state["dismissed"] = dict(sorted(items.items(), key=lambda kv: str(kv[1]))[-MAX_DISMISSED:])
-        C.write_atomic(d / "state.json", json.dumps(state))
-    # The start card must agree at once, not after the next scan.
+        write_private(d / "state.json", json.dumps(state))
+        if on:     # the start card must agree at once, not after the next scan
+            _take_off_summary(d, sid)
+
+
+def _take_off_summary(d: Path, sid: str) -> None:
     summary = read_json(d / "summary.json", {})
-    ids = summary.get("week_ids")
-    if on and isinstance(ids, list) and sid in ids and isinstance(summary.get("week"), int):
-        ids.remove(sid)
-        summary["week"] = max(0, summary["week"] - 1)
-        C.write_atomic(d / "summary.json", json.dumps(summary))
+    vaults = summary.get("vaults") if isinstance(summary.get("vaults"), dict) else {}
+    changed = False
+    for entry in vaults.values():
+        for ids_key, count_key in (("week_ids", "week"), ("continued_ids", "week"), ("elsewhere_ids", "elsewhere")):
+            ids = entry.get(ids_key) if isinstance(entry, dict) else None
+            if isinstance(ids, list) and sid in ids and isinstance(entry.get(count_key), int):
+                ids.remove(sid)
+                entry[count_key] = max(0, entry[count_key] - 1)
+                changed = True
+    if changed:
+        write_private(d / "summary.json", json.dumps(summary))
+
+
+def vault_key(vault: Path) -> str:
+    return os.path.realpath(str(vault))
+
+
+def write_summary(vault: Path, entry: dict) -> None:
+    """The start hook's numbers, per vault: a run on one vault says nothing about another."""
+    d = state_dir()
+    with (d / "state.lock").open("w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        old = read_json(d / "summary.json", {})
+        vaults = old.get("vaults") if isinstance(old.get("vaults"), dict) else {}
+        vaults = {k: v for k, v in vaults.items() if isinstance(v, dict) and isinstance(v.get("at"), (int, float))}
+        vaults[vault_key(vault)] = entry
+        newest = sorted(vaults.items(), key=lambda kv: kv[1]["at"], reverse=True)[:SUMMARY_VAULTS]
+        write_private(d / "summary.json", json.dumps({"vaults": dict(newest)}))
 
 
 def scan(vault: Path, budget: float, now: float) -> tuple[list[dict], dict]:
     """One row per transcript, newest first, with its status. Rows come from the cache unless the file
     changed, so a repeat run only costs a stat per file. Out of time, the rest wait for the next run."""
     scope = scope_of(vault)
-    info = {"scope": scope, "not_finished": 0}
+    info = {"scope": scope, "not_finished": 0, "too_old": 0}
     d = state_dir()
     if scope == "off":
         (d / "cache.json").unlink(missing_ok=True)   # switched off means no titles kept either
@@ -468,21 +628,24 @@ def scan(vault: Path, budget: float, now: float) -> tuple[list[dict], dict]:
             continue     # deleted since it was listed
         if st.st_mtime >= now - LOOKBACK_DAYS * 86400:
             files.append((st.st_mtime, st.st_size, source, f.path, f.name))
+        else:
+            info["too_old"] += 1
     files.sort(reverse=True)
     marks = vault_marks(vault)
     chat_ids = page_chat_ids(vault)
     dismissed = dismissed_ids()
+    current = {os.environ.get(k) for k in SESSION_ENVS} - {None, ""}   # the chat asking is still going on
     rows, fresh_cache, dirty = [], {}, not usable
     for mtime, size, source, path, name in files:
         base = {"path": path, "source": source, "mtime": mtime, "id": session_id(source, name)}
-        if mtime > now - FRESH_SECONDS:
+        if mtime > now - FRESH_SECONDS or base["id"] in current:
             rows.append(dict(base, status="too_recent"))
             continue
         if source == "claude" and name.startswith("agent-"):
             rows.append(dict(base, status="subagent"))
             continue
         hit = cache.get(path)
-        if isinstance(hit, dict) and hit.get("mtime") == mtime and hit.get("size") == size:
+        if good_row(hit, mtime, size):
             meta = hit
         else:
             left = stop_at - time.monotonic()
@@ -492,19 +655,68 @@ def scan(vault: Path, budget: float, now: float) -> tuple[list[dict], dict]:
             meta = read_transcript(path, source, marks, time.monotonic() + min(FILE_SECONDS, left))
             if meta is None:
                 continue     # deleted while being read, or not a plain file
-            if meta["truncated"] and stop_at - time.monotonic() <= 0:
+            cut = meta.pop("clock_cut")
+            if cut and (meta["users"] < MIN_USER_MESSAGES or stop_at - time.monotonic() <= 0):
                 info["not_finished"] += 1     # cut by this run's clock, not by its size: read it again later
                 continue
             meta.update(mtime=mtime, size=size)
+            if cut:    # enough to list now, but not kept, so the next run reads the rest
+                rows.append(_classify(dict(base, **meta), scope, chat_ids, dismissed, vault))
+                continue
             dirty = True
         fresh_cache[path] = meta
         rows.append(_classify(dict(base, **meta), scope, chat_ids, dismissed, vault))
     if dirty or len(fresh_cache) != len(cache):
-        C.write_atomic(d / "cache.json", json.dumps({"version": CACHE_VERSION, "vault": str(vault), "files": fresh_cache}))
+        write_private(d / "cache.json", json.dumps({"version": CACHE_VERSION, "vault": str(vault), "files": fresh_cache}))
+    collapse_forks(rows)
     return rows, info
 
 
-def _classify(row: dict, scope: str, chat_ids: set[str], dismissed: set[str], vault: Path) -> dict:
+def collapse_forks(rows: list[dict]) -> None:
+    """A fork starts as a copy of another session, so the pair is one piece of work: one row stands for
+    both, the one with the most messages. A copy shows by its first message, same text at the same
+    moment, or by the fork's own note of where it came from when the file has one."""
+    live = [r for r in rows if r.get("id") and r["status"] in ("missed", "covered", "dismissed", "other_folder")]
+    by_id = {r["id"]: r for r in live}
+    link = {i: i for i in by_id}
+
+    def root(i):
+        while link[i] != i:
+            link[i] = link[link[i]]
+            i = link[i]
+        return i
+    first_seen: dict[tuple, str] = {}
+    for r in live:
+        if r.get("first_time"):
+            other = first_seen.setdefault((r["source"], r["first_time"], r.get("title")), r["id"])
+            link[root(r["id"])] = root(other)
+        if r.get("fork_of") in by_id:
+            link[root(r["id"])] = root(r["fork_of"])
+    groups: dict[str, list[dict]] = {}
+    for r in live:
+        groups.setdefault(root(r["id"]), []).append(r)
+    for group in groups.values():
+        if len(group) < 2:
+            continue
+        keep = max(group, key=lambda r: (r["users"], r["mtime"]))
+        logged = [r for r in group if r["status"] == "covered"]
+        dismissed = any(r["status"] == "dismissed" for r in group)
+        keep["also"] = [r["path"] for r in group if r is not keep]
+        for r in group:
+            if r is not keep:
+                r["status"] = "fork_copy"
+        if keep["status"] == "covered":
+            continue
+        if dismissed:
+            keep["status"] = "dismissed"
+        elif logged:
+            if continued_after(keep, max(r.get("cover_at", 0) for r in logged)):
+                keep["status"], keep["continued"] = "missed", True
+            else:
+                keep["status"], keep["route"], keep["continued"] = "covered", logged[0]["route"], False
+
+
+def _classify(row: dict, scope: str, chat_ids: dict[str, float], dismissed: set[str], vault: Path) -> dict:
     sid = row["id"]
     kind = row.get("kind")
     row["date"] = local_date(row["first_time"] if row.get("first_time") else row["mtime"])
@@ -518,26 +730,35 @@ def _classify(row: dict, scope: str, chat_ids: set[str], dismissed: set[str], va
         row["status"] = "short"
     else:
         route = covered_by(sid, chat_ids, vault)
-        if route:
-            row["status"], row["route"] = "covered", route
-        elif not (scope == "all" or row.get("in_vault") or row.get("touched")):
-            row["status"] = "other_folder"
+        at = covered_at(sid, chat_ids) if route and route != "skipped" else 0
+        if route and not continued_after(row, at):
+            row["status"], row["route"], row["cover_at"] = "covered", route, at
+        elif sid in dismissed:
+            row["status"] = "dismissed"
+        elif route or scope == "all" or row.get("in_vault") or row.get("touched"):
+            row["status"], row["continued"] = "missed", bool(route)   # logged once, then much more work
         else:
-            row["status"] = "dismissed" if sid in dismissed else "missed"
+            row["status"] = "other_folder"
     return row
 
 
 def _folder_name(cwd: str, path: str, source: str) -> str:
     if cwd:
         h = str(home())
-        return clean_title("~" + cwd[len(h):] if cwd == h or cwd.startswith(h + os.sep) else cwd, 60)
-    return clean_title(Path(path).parent.name, 60) if source == "claude" else "(unknown folder)"
+        return clean_title("~" + cwd[len(h):] if cwd == h or cwd.startswith(h + os.sep) else cwd, 60, is_path=True)
+    return clean_title(Path(path).parent.name, 60, is_path=True) if source == "claude" else "(unknown folder)"
 
 
 def public_row(r: dict, now: float) -> dict:
     return {"id": r["id"], "source": r["source"], "date": r["date"], "folder": r["folder"],
             "title": r.get("title") or "(no title)", "users": r["users"], "path": r["path"],
-            "age_days": int((now - r["mtime"]) // 86400)}
+            "age_days": int((now - r["mtime"]) // 86400), "continued": bool(r.get("continued")),
+            "also": r.get("also") or []}
+
+
+def elsewhere_line(n: int) -> str:
+    return (f"{n} session{' elsewhere was' if n == 1 else 's elsewhere were'} not checked - "
+            f"say 'catch up' to see {'it' if n == 1 else 'them'}.")
 
 
 def risk_warning(oldest_mtime: float, now: float) -> str:
@@ -548,6 +769,8 @@ def risk_warning(oldest_mtime: float, now: float) -> str:
 def inventory(vault: Path, days: int = 7, budget: float = CLI_SECONDS, now: float | None = None) -> dict:
     """The report behind the command, the start card and the Inbox. Reads no text beyond titles."""
     now = time.time() if now is None else now
+    asked = days
+    days = max(0, min(days, MAX_DAYS))
     rows, info = scan(vault, budget, now)
     since = now - (days + OVERLAP_DAYS) * 86400
     window = [r for r in rows if r["mtime"] >= since]
@@ -559,23 +782,31 @@ def inventory(vault: Path, days: int = 7, budget: float = CLI_SECONDS, now: floa
             routes[r["route"]] = routes.get(r["route"], 0) + 1
     at_risk = [r for r in missed_all if r["source"] == "claude" and now - r["mtime"] > WARN_DAYS * 86400]
     oldest = min((r["mtime"] for r in at_risk), default=0)
+    newest_first = lambda status, among: [public_row(r, now) for r in sorted((r for r in among if r["status"] == status),  # noqa: E731
+                                                                             key=lambda r: r["mtime"], reverse=True)]
     report = {
         "scope": info["scope"], "window_days": days + OVERLAP_DAYS,
-        "missed": [public_row(r, now) for r in sorted((r for r in window if r["status"] == "missed"),
-                                                      key=lambda r: r["mtime"], reverse=True)],
+        "days_asked": asked, "days_cut": asked > days, "too_old": info["too_old"],
+        "missed": newest_first("missed", window),
+        "elsewhere": newest_first("other_folder", window),
+        "dismissed_rows": newest_first("dismissed", rows),
         "older_missed": sum(1 for r in missed_all if r["mtime"] < since),
         "covered": sum(routes.values()), "covered_by": routes, "dismissed": count("dismissed"),
         "other_folders": count("other_folder"),
         "skipped": {"too_recent": count("too_recent"), "subagent": count("subagent"), "short": count("short"),
-                    "automated": count("automated")},
+                    "automated": count("automated"), "fork_copies": count("fork_copy")},
         "unreadable": count("unknown"), "not_finished": info["not_finished"],
         "warning": risk_warning(oldest, now) if at_risk else "",
     }
     week = [r for r in missed_all if r["mtime"] >= now - 7 * 86400]
+    away = [r for r in rows if r["status"] == "other_folder" and r["mtime"] >= now - 7 * 86400]
     # The only file the start hook reads: counts and ids, no titles, so no chat text reaches the card.
-    C.write_atomic(state_dir() / "summary.json", json.dumps({
-        "at": now, "week": len(week), "week_ids": [r["id"] for r in week][:WEEK_IDS],
-        "risk_oldest": oldest, "partial": bool(info["not_finished"])}))
+    # A continued session keeps its logged flag, so the hook must not take it off the count for that.
+    write_summary(vault, {
+        "at": now, "week": len(week), "week_ids": [r["id"] for r in week if not r.get("continued")][:WEEK_IDS],
+        "continued_ids": [r["id"] for r in week if r.get("continued")][:WEEK_IDS],
+        "elsewhere": len(away), "elsewhere_ids": [r["id"] for r in away][:WEEK_IDS],
+        "risk_oldest": oldest, "partial": bool(info["not_finished"])})
     return report
 
 
@@ -602,7 +833,11 @@ def week_bounds(week: str | None, today: dt.date) -> tuple[int, int, dt.date, dt
         if not m:
             raise ValueError("week must look like 2026-W44")
         year, num = int(m.group(1)), int(m.group(2))
-        monday = dt.date.fromisocalendar(year, num, 1)
+        try:
+            monday = dt.date.fromisocalendar(year, num, 1)
+            return year, num, monday, monday + dt.timedelta(days=6)
+        except (ValueError, OverflowError):
+            raise ValueError(f"{week} is not a week the calendar has. It must look like 2026-W44.") from None
     else:
         year, num, _ = today.isocalendar()
         monday = today - dt.timedelta(days=today.weekday())
@@ -718,10 +953,15 @@ def print_report(rep: dict) -> None:
     if rep["scope"] == "off":
         print("The Gardener is off (gardener_scope: off in kit.yaml).")
         return
-    missed = rep["missed"]
-    print(f"Last {rep['window_days']} days: {rep['covered']} session(s) logged or skipped by you, {len(missed)} never logged.")
+    missed, away = rep["missed"], rep["elsewhere"]
+    if rep["days_cut"]:
+        print(f"Only the last {LOOKBACK_DAYS} days are read, so --days {rep['days_asked']} was cut to {MAX_DAYS}. "
+              f"{rep['too_old']} older session file(s) were not read.")
+    print(f"Last {rep['window_days']} days: {rep['covered']} session(s) logged or skipped by you, {len(missed)} never logged"
+          + (f", {len(away)} elsewhere not checked." if away else "."))
     for r in missed:
-        print(f"  {r['date']}  {r['folder']}  \"{r['title']}\"  ({r['users']} messages, {r['source']})  id {r['id']}")
+        note = ", continued after it was logged" if r["continued"] else ""
+        print(f"  {r['date']}  {r['folder']}  \"{r['title']}\"  ({r['users']} messages, {r['source']}{note})  id {r['id']}")
     if missed:
         print("Say 'catch up' to log any of these.")
     if rep["older_missed"]:
@@ -729,8 +969,12 @@ def print_report(rep: dict) -> None:
     if rep["warning"]:
         print("WARNING: " + rep["warning"])
     if rep["other_folders"]:
-        print(f"Not counted: {rep['other_folders']} session(s) in other folders that never mention your cortex. "
+        print(f"Not checked: {rep['other_folders']} session(s) in other folders that never mention your cortex. "
               "To count them, set gardener_scope: all in kit.yaml.")
+        for r in away[:10]:
+            print(f"  {r['date']}  {r['folder']}  \"{r['title']}\"  ({r['users']} messages, {r['source']})  id {r['id']}")
+        if len(away) > 10:
+            print(f"  and {len(away) - 10} more. Say 'catch up' to go through them.")
     if rep["dismissed"]:
         print(f"Dismissed by you: {rep['dismissed']}.")
     if rep["unreadable"]:
@@ -767,7 +1011,7 @@ def run(args) -> int:
         if not args.quiet:
             print(f"Wrote {path.relative_to(vault).as_posix()}")
         return 0
-    rep = inventory(vault, days=max(0, args.days))
+    rep = inventory(vault, days=args.days)
     if args.json:
         print(json.dumps(rep, indent=2))
     else:

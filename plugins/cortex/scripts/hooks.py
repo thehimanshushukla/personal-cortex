@@ -14,6 +14,7 @@ import datetime as dt
 import json
 import os
 import re
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -99,34 +100,56 @@ def unpushed_commits(v: Path) -> int:
 
 GARDENER = Path.home() / ".cortex" / "gardener" / "summary.json"
 GARDENER_STALE = 3600   # seconds before the start hook asks for a fresh count
+GARDENER_BYTES = 256 * 1024
 WARN_DAYS = 21
 
 
-def gardener_line() -> str:
+def gardener_summary(v: Path) -> dict:
+    """This vault's numbers. Opened so that a pipe in the file's place cannot hang a session start."""
+    try:
+        fd = os.open(GARDENER, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW)
+        with os.fdopen(fd, "rb") as fh:
+            st = os.fstat(fh.fileno())
+            if not stat.S_ISREG(st.st_mode) or st.st_size > GARDENER_BYTES:
+                return {}
+            info = json.loads(fh.read(GARDENER_BYTES))
+    except (OSError, ValueError, RecursionError):
+        return {}
+    vaults = info.get("vaults") if isinstance(info, dict) else None
+    entry = vaults.get(os.path.realpath(str(v))) if isinstance(vaults, dict) else None
+    return entry if isinstance(entry, dict) else {}
+
+
+def gardener_line(v: Path) -> str:
     """The card's count of unlogged sessions. No transcript is opened here, so a huge folder cannot
     slow a session start: this reads one small file of numbers and ids, and a stale or missing one
     starts a separate run in the background. Sessions logged since that run are taken off."""
-    try:
-        info = json.loads(GARDENER.read_text()) if GARDENER.stat().st_size < 64 * 1024 else {}
-    except (OSError, ValueError):
-        info = {}
+    info = gardener_summary(v)
     now = dt.datetime.now().timestamp()
     at, week, ids, oldest = info.get("at"), info.get("week"), info.get("week_ids"), info.get("risk_oldest")
     if not isinstance(at, (int, float)) or now - at > GARDENER_STALE:
         try:
-            subprocess.Popen([sys.executable, str(HERE / "cortex.py"), "gardener", "--refresh", "--quiet"],
+            subprocess.Popen([sys.executable, str(HERE / "cortex.py"), "--vault", str(v), "gardener", "--refresh", "--quiet"],
                              stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                              start_new_session=True)
         except OSError:
             pass
+    def still_open(count, id_list) -> int:
+        if not isinstance(count, int) or not isinstance(id_list, list):
+            return 0
+        return max(0, count - sum(1 for s in id_list[:200] if isinstance(s, str) and "/" not in s
+                                  and ((STATE_ROOT / s / "logged").exists() or (STATE_ROOT / s / "skipped").exists())))
     lines = []
-    if isinstance(week, int) and isinstance(ids, list):
-        done = sum(1 for s in ids[:200] if isinstance(s, str) and "/" not in s
-                   and ((STATE_ROOT / s / "logged").exists() or (STATE_ROOT / s / "skipped").exists()))
-        n = max(0, week - done)
-        if n:
-            lines.append(f"{n} session{' this week was' if n == 1 else 's this week were'} never logged - say 'catch up'.")
-    if isinstance(oldest, (int, float)) and oldest and now - oldest > WARN_DAYS * 86400:
+    n, away = still_open(week, ids), still_open(info.get("elsewhere"), info.get("elsewhere_ids"))
+    missed = f"{n} session{' this week was' if n == 1 else 's this week were'} never logged"
+    if n and away:     # always one short line, whichever of the two there is
+        lines.append(f"{missed}, {away} elsewhere {'was' if away == 1 else 'were'} not checked - say 'catch up'.")
+    elif n:
+        lines.append(f"{missed} - say 'catch up'.")
+    elif away:
+        lines.append(f"{away} session{' elsewhere this week was' if away == 1 else 's elsewhere this week were'} not checked - "
+                     f"say 'catch up' to see {'it' if away == 1 else 'them'}.")
+    if isinstance(oldest, (int, float)) and 0 < oldest < now and now - oldest > WARN_DAYS * 86400:
         lines.append(f"The oldest unlogged session is {int((now - oldest) // 86400)} days old. Claude Code deletes "
                      "transcripts after 30 days by default - say 'catch up' soon.")
     return "\n".join(lines)
@@ -159,7 +182,7 @@ def session_start(p: dict) -> int:
     elif unpushed:
         text += (f"\n{unpushed} saved change(s) not on GitHub yet (last push did not go through). Offer once: "
                  f"\"say 'back up my cortex' to send them\".\n")
-    missed = gardener_line()
+    missed = gardener_line(v)
     if missed:
         text += f"\n{missed}\n"
     # Weekly backup safety net: if the scheduled one was missed (Mac asleep), run it now in the background.

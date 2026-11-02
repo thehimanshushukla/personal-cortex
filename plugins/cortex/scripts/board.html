@@ -461,13 +461,14 @@ main { padding: 0 20px 40px; }
       ["unsaved", "Pages not saved yet", "Changed on this Mac but not yet saved to your backup. Say 'back up my cortex' in Claude.",
         function (r) { return r.title + " (" + r.status + ")"; }],
       ["missed", "Sessions never logged", "Work on this Mac that never reached your cortex. Ask Claude reads that session and proposes what to log. A plain Claude Chat cannot be seen here, so use 'save this chat' in the chat itself.",
-        function (r) { return r.date + " - " + r.folder + " - " + r.title; }]];
+        function (r) { return r.date + " - " + r.folder + " - " + r.title + (r.continued ? " - continued after it was logged" : ""); }]];
     var total = 0;
     groups.forEach(function (g) {
       var rows = ib[g[0]] || [];
       if (g[0] === "unsaved" && !ib.git) return;
       total += rows.length;
-      if (!rows.length) return;
+      // The note can matter with no rows: sessions elsewhere were not checked.
+      if (!rows.length && !(g[0] === "missed" && ib.missed_note)) return;
       var s = el("section", {}, [el("h2", { text: g[1] + " (" + rows.length + ")" }), el("p", { cls: "why", text: g[2] })]);
       if (g[0] === "missed" && ib.missed_note) s.appendChild(el("p", { cls: "why", text: ib.missed_note }));
       rows.forEach(function (r) {
@@ -489,7 +490,7 @@ main { padding: 0 20px 40px; }
       });
       v.appendChild(s);
     });
-    if (!total) v.appendChild(el("section", {}, [el("h2", { text: "Your inbox is empty" }),
+    if (!total && !ib.missed_note) v.appendChild(el("section", {}, [el("h2", { text: "Your inbox is empty" }),
       el("p", { cls: "why", text: "Nothing is waiting to be filed or saved." })]));
     $("tab-inbox").textContent = "Inbox" + (total ? " (" + total + ")" : "");
   }

@@ -9,6 +9,8 @@ The Gardener, first part: it finds working sessions that never reached your cort
 - A warning when an unlogged session is over 21 days old, because Claude Code deletes transcripts after 30 days by default.
 - `cortex.py gardener --journal` writes a weekly page, `_cortex/journal/<year>-W<week>.md`, with counts and the titles of logged pages only.
 - Session pages can carry `chat_id:`, so a page knows which chat it came from.
+- Sessions in other folders that were not checked are counted on the start card and the board, and catch-up offers them.
+- `cortex.py new --date` now sets `created` to that date, so a caught-up session counts in the week it started.
 - `gardener_scope` in `kit.yaml`: `cortex` (default: your cortex folder, and sessions that mention or touched it), `all`, or `off`.
 - A plain Claude Chat cannot be seen, because it is not on your Mac. Use "save this chat" there.
 - Nothing runs on a timer. `cortex.py install-gardener --yes` adds a weekly run, only if you ask for it.

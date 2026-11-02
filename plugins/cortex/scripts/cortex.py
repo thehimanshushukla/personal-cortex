@@ -752,7 +752,9 @@ def cmd_new(args) -> int:
         fm.append(f"area: {area}")
     if t in THING_TYPES and thing:
         fm.append(f"thing: {thing}")
-    fm += ["status: active", f"created: {today()}", f"updated: {today()}"]
+    # A page made for a past date (catch-up, a debrief) was created then. A date that is not one changes nothing.
+    created = d if re.fullmatch(r"\d{4}-\d{2}-\d{2}", d) else today()
+    fm += ["status: active", f"created: {created}", f"updated: {today()}"]
     if t == "session":
         # Which chat this page came from, so the Gardener knows it is covered. catch-up names a past session.
         chat = args.chat_id or os.environ.get("CLAUDE_CODE_SESSION_ID") or os.environ.get("CODEX_THREAD_ID") or ""
