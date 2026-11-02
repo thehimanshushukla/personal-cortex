@@ -11,15 +11,23 @@ const NOT_PAGES_ANYWHERE = new Set(['CLAUDE.md', 'README.md']);
 const NOT_PAGES_AT_ROOT = new Set(['AGENTS.md', 'GEMINI.md', 'home.md']);
 const REQUIRED = ['id', 'title', 'type', 'status', 'created', 'updated', 'summary'];
 const MAX_FILE_BYTES = 2 * 1024 * 1024; // a page bigger than this is not read
+const MAX_TASK_LINE = 4000; // a longer line is never a task line, here and in cortex.py
 const PY_LINE_BREAKS = /\r\n|[\n\r\v\f\x1c\x1d\x1e\x85\u2028\u2029]/;
 const HEADER_KEY_RE = /^(id|title|type|status|created|updated|summary|area|tags|links):\s/;
 const ANY_KEY_RE = /^[\p{L}_][\p{L}\p{N}_-]*:(\s|$)/u;
-const FOLLOWUP_RE = /^(?<indent>\s*)-\s\[(?<done>[ xX])\]\s+@(?<person>[a-z0-9-]+)\s+(?<text>[^\n]*?)(?<meta>(?:\s*\((?:due|added|done)\s+\d{4}-\d{2}-\d{2}\))*)\s*\{(?<owner>mine|theirs)\}(?:\s*\{(?<doing>doing)\})?(?<trail>\s*)$/;
+const TASK_HEAD_RE = /^\s*-\s\[([ xX])\]\s+@([a-z0-9-]+)\s+(?=\S)/;
+const ONE_META_RE = /^\((?:due|added|done)\s+\d{4}-\d{2}-\d{2}\)$/;
 const META_RE = /\((due|added|done)\s+(\d{4}-\d{2}-\d{2})\)/g;
 const FENCE_RE = /^(?<indent>[ \t]*)(?<fence>`{3,}|~{3,})(?<rest>[^\n]*)$/;
 const LIST_ITEM_RE = /^[ \t]*(?:[-*+]|\d{1,9}[.)])(?:[ \t]|$)/;
-const PRIVATE_TAG = /\{private\}/i;
-const HEADING_RE = /^ {0,3}(#{1,6})[ \t]+(.*?)[ \t#]*$/;
+const PRIVATE_TAG = /\{\s*private\s*\}/i;
+const HEADING_RE = /^ {0,3}(#{1,6})[ \t]+/;
+const LOOSE_HEADING_RE = /^[ \t>]*(#{1,6})[ \t]*([^]*)/; // for finding a private heading: wider, on purpose
+const HTML_HEADING_RE = /^\s*<h([1-6])\b[^>]*>([^]*)/i;
+const SETEXT_RE = /^ {0,3}(=+|-+)[ \t]*$/;
+const HEADING_TEXT_CHARS = 300;
+const INVISIBLE = '\\u200b-\\u200d\\u2060\\ufeff';
+const NOTES_TAG_RE = new RegExp(`<[\\s\\\\/${INVISIBLE}]*cortex[\\s_\\-${INVISIBLE}]*notes`, 'gi');
 
 // A refusal or problem to show the person in plain words. Anything else is a real bug.
 class UserError extends Error {}
@@ -31,10 +39,25 @@ function localDate(d = new Date()) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
-function slugify(text) {
+function bareSlug(text) {
   const s = String(text).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-  return s.slice(0, 70).replace(/^-+|-+$/g, '') || 'untitled';
+  return s.slice(0, 70).replace(/^-+|-+$/g, '');
 }
+
+const slugify = (text) => bareSlug(text) || 'untitled'; // the same as slugify in cortex.py
+
+const LETTERS = { ß: 'ss', æ: 'ae', œ: 'oe', ø: 'o', đ: 'd', ð: 'd', þ: 'th', ł: 'l', ı: 'i', ħ: 'h', ŋ: 'ng' };
+
+// "José Núñez" as plain Latin letters. Other scripts stay as they are.
+function plainLetters(text) {
+  return String(text).normalize('NFKD').replace(/\p{M}+/gu, '').toLowerCase().replace(/[ßæœøđðþłıħŋ]/g, (c) => LETTERS[c]);
+}
+
+// A slug the kit accepts, or '' when the text has nothing to make one from. Never 'untitled'.
+const plainSlug = (text) => bareSlug(plainLetters(text));
+
+// Text that repeats anything stored or supplied can never close the notes marker, however it is spelled.
+const neutralise = (text) => String(text).replace(NOTES_TAG_RE, '<cortex-notes-text');
 
 // ---------------------------------------------------------------- finding the cortex
 
@@ -45,30 +68,52 @@ function expandHome(p) {
 }
 
 // Order: ~/.cortex/config.json if present and valid, else the folder set in the extension, else ~/cortex.
-function vaultLocation() {
+// Returns the folder, and how it was chosen, so every message can say so.
+function vaultSource() {
+  const configFile = path.join(os.homedir(), '.cortex', 'config.json');
+  const defaultFolder = path.join(os.homedir(), 'cortex');
+  let fromConfig = '';
   try {
-    const cfg = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.cortex', 'config.json'), 'utf8'));
+    const cfg = JSON.parse(fs.readFileSync(configFile, 'utf8'));
     const v = cfg && typeof cfg.vault === 'string' ? expandHome(cfg.vault.trim()) : '';
-    if (v && path.isAbsolute(v)) return path.resolve(v);
+    if (v && path.isAbsolute(v)) fromConfig = path.resolve(v);
   } catch (e) { /* missing or broken: fall through to the setting */ }
   const set = expandHome((process.env.CORTEX_FOLDER || '').trim());
-  if (set && !set.includes('${') && path.isAbsolute(set)) return path.resolve(set);
-  return path.join(os.homedir(), 'cortex');
+  const chosen = set && !set.includes('${') && path.isAbsolute(set) ? path.resolve(set) : '';
+  return { where: fromConfig || chosen || defaultFolder, fromConfig, chosen, defaultFolder, configFile, configExists: fs.existsSync(configFile) };
+}
+
+const vaultLocation = () => vaultSource().where;
+
+// In plain words, why this folder is the one in use.
+function folderReason(src = vaultSource()) {
+  if (src.fromConfig) {
+    const other = src.chosen && src.chosen !== src.fromConfig && src.chosen !== src.defaultFolder;
+    return other ? `set by ${src.configFile}, which wins over the extension's folder setting (${src.chosen})` : `set by ${src.configFile}`;
+  }
+  const broken = src.configExists ? `${src.configFile} could not be used, so it was ignored; ` : '';
+  return `${broken}${src.chosen && src.chosen !== src.defaultFolder ? "from the extension's folder setting" : 'the default folder'}`;
+}
+
+function configPointsNowhere(src) {
+  return `Your settings file ${src.configFile} says your Cortex is at ${src.where}, but that folder is not there. That file wins over the extension's folder setting, so no other folder was tried. Reconnect the drive that holds the folder, or change or remove that file.`;
 }
 
 // The real path of an existing cortex, or a plain refusal.
 function requireVault() {
-  const where = vaultLocation();
+  const src = vaultSource();
+  const { where } = src;
   let st;
   try {
     st = fs.statSync(where);
   } catch (e) {
-    throw new UserError(`No Cortex found at ${where}. Say "set up my cortex" and one can be created there.`);
+    if (src.fromConfig) throw new UserError(configPointsNowhere(src));
+    throw new UserError(`No Cortex found at ${where} (${folderReason(src)}). Say "set up my cortex" and one can be created there.`);
   }
-  if (!st.isDirectory()) throw new UserError(`${where} is a file, not a folder, so it cannot hold a Cortex. Choose a folder in the extension's settings.`);
-  const real = fs.realpathSync(where);
+  if (!st.isDirectory()) throw new UserError(`${where} is a file, not a folder, so it cannot hold a Cortex (${folderReason(src)}).`);
+  const real = fs.realpathSync.native(where);
   if (!fs.existsSync(path.join(real, 'kit.yaml')) && !fs.existsSync(path.join(real, GENERATED))) {
-    throw new UserError(`The folder ${where} has no Cortex in it. Say "set up my cortex" if it is empty, or choose your Cortex folder in the extension's settings.`);
+    throw new UserError(`The folder ${where} has no Cortex in it (${folderReason(src)}). Say "set up my cortex" if it is empty, or point Cortex at the folder that holds your pages.`);
   }
   return real;
 }
@@ -78,18 +123,35 @@ function isInside(root, target) {
   return rel === '' || (!rel.startsWith('..' + path.sep) && rel !== '..' && !path.isAbsolute(rel));
 }
 
+// The files the kit generates repeat page text with nothing hidden: the list of follow-ups, the index,
+// the card and the home page. They are never opened or searched here. Case does not matter, because
+// on a Mac _CORTEX/FOLLOWUPS.md is the same file as _cortex/followups.md.
+function isGenerated(rel) {
+  const p = String(rel).replace(/\\/g, '/').replace(/^(\.?\/)+/, '').toLowerCase();
+  return p === 'home.md' || p === GENERATED || p.startsWith(`${GENERATED}/`);
+}
+
 // ---------------------------------------------------------------- reading one page
 
 function readText(abs) {
+  if (fs.statSync(abs).size > MAX_FILE_BYTES) throw new UserError('That file is too large to read here.');
   const raw = fs.readFileSync(abs);
   return new TextDecoder('utf-8', { fatal: true }).decode(raw).replace(/\r\n?/g, '\n');
+}
+
+function stripQuotes(s) {
+  let from = 0;
+  let to = s.length;
+  while (from < to && (s[from] === "'" || s[from] === '"')) from += 1;
+  while (to > from && (s[to - 1] === "'" || s[to - 1] === '"')) to -= 1;
+  return s.slice(from, to);
 }
 
 function parseValue(raw) {
   raw = raw.trim();
   if (raw.startsWith('[') && raw.endsWith(']')) {
     const inner = raw.slice(1, -1).trim();
-    return inner ? inner.split(',').filter((v) => v.trim()).map((v) => v.trim().replace(/^['"]+|['"]+$/g, '')) : [];
+    return inner ? inner.split(',').filter((v) => v.trim()).map((v) => stripQuotes(v.trim())) : [];
   }
   if (raw.length >= 2 && raw[0] === raw[raw.length - 1] && (raw[0] === "'" || raw[0] === '"')) return raw.slice(1, -1);
   return raw;
@@ -146,23 +208,53 @@ function withoutPrivateLines(text) {
   return { text: kept.join('\n'), withheld: lines.length - kept.length };
 }
 
-// Removes every "## Private" section down to the next heading of the same or a higher level.
-// A heading inside a code block in that section does not end it, so nothing below can leak.
+// True for Private, **Private**, _Private_, [Private], <b>Private</b>: and any heading tagged {private}.
+function namesPrivate(title) {
+  const t = title.slice(0, HEADING_TEXT_CHARS);
+  if (PRIVATE_TAG.test(t)) return true;
+  const plain = t.normalize('NFKC').replace(/<[^>]*>/g, ' ').replace(/[*~`\\_]/g, ' ').replace(/^[^\p{L}\p{N}]+/u, '');
+  return /^private(?![\p{L}\p{N}])/i.test(plain);
+}
+
+function isHeading(line) {
+  const m = HEADING_RE.exec(line);
+  return m ? m[1].length : 0;
+}
+
+// If this line opens a private section: its level, and whether the next line is its underline.
+// Finding one is wide on purpose: when in doubt, hide.
+function privateHeading(line, next) {
+  const head = line.slice(0, MAX_TASK_LINE);
+  const m = LOOSE_HEADING_RE.exec(head) || HTML_HEADING_RE.exec(head);
+  if (m && namesPrivate(m[2])) return { level: Number(m[1]) || m[1].length, lines: 1 };
+  const under = next === undefined ? null : SETEXT_RE.exec(next);
+  if (under && head.trim() && namesPrivate(head)) return { level: under[1][0] === '=' ? 1 : 2, lines: 2 };
+  return null;
+}
+
+// Removes every private section down to the next # heading of the same or a higher level. A heading
+// inside a code block does not end one, and neither does an underlined heading, because a --- under a
+// line is often just a divider. So nothing below can leak; at worst too much stays hidden.
 function withoutPrivateSections(body) {
+  const lines = body.split('\n');
   const out = [];
+  const hidden = [];
   let level = 0;
   let fence = '';
   let withheld = 0;
-  for (const line of body.split('\n')) {
-    const h = HEADING_RE.exec(line);
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    const opener = fence ? null : privateHeading(line, lines[i + 1]);
+    if (opener) {
+      level = level ? Math.min(level, opener.level) : opener.level;
+      fence = '';
+      withheld += 1;
+      hidden.push(...lines.slice(i, i + opener.lines));
+      i += opener.lines - 1;
+      continue;
+    }
     if (!level) {
-      if (h && /^private\b/i.test(h[2])) {
-        level = h[1].length;
-        fence = '';
-        withheld += 1;
-      } else {
-        out.push(line);
-      }
+      out.push(line);
       continue;
     }
     const f = FENCE_RE.exec(line);
@@ -170,22 +262,36 @@ function withoutPrivateSections(body) {
       if (f && f.groups.fence[0] === fence[0] && f.groups.fence.length >= fence.length && !f.groups.rest.trim()) fence = '';
     } else if (f) {
       fence = f.groups.fence;
-    } else if (h && h[1].length <= level) {
-      if (/^private\b/i.test(h[2])) { level = h[1].length; withheld += 1; continue; }
+    } else if (isHeading(line) && isHeading(line) <= level) {
       level = 0;
       out.push(line);
+      continue;
     }
+    hidden.push(line);
   }
-  return { text: out.join('\n'), withheld };
+  return { text: out.join('\n'), hidden, withheld };
 }
 
-// The page with private parts removed first, so no tool can read, count or match on them.
+// Text with private parts removed. Sections first, because a tagged heading opens a section.
+function publicText(text) {
+  const sections = withoutPrivateSections(text);
+  const lines = withoutPrivateLines(sections.text);
+  return { text: lines.text, withheld: sections.withheld + lines.withheld };
+}
+
+// The page with private parts removed first, so no tool can read, count or match on them. A tagged
+// header line keeps its key, so the page still counts, and loses its value.
 function publicPage(rel, source) {
-  const lines = withoutPrivateLines(source);
-  const page = parsePage(rel, lines.text);
-  const sections = withoutPrivateSections(page.body);
-  page.body = sections.text;
-  page.withheld = lines.withheld + sections.withheld;
+  const page = parsePage(rel, source);
+  const clean = publicText(page.body);
+  page.body = clean.text;
+  page.withheld = clean.withheld;
+  for (const key of Object.keys(page.meta)) {
+    if (PRIVATE_TAG.test([].concat(page.meta[key]).join(' '))) {
+      page.meta[key] = '(private)';
+      page.withheld += 1;
+    }
+  }
   return page;
 }
 
@@ -207,15 +313,17 @@ function walk(vault) {
     for (const entry of entries) {
       const abs = path.join(dir, entry.name);
       if (entry.isDirectory()) {
-        if (!SKIP_DIRS.has(entry.name) && !entry.name.startsWith('.')) dirs.push(abs);
+        if (!SKIP_DIRS.has(entry.name) && !entry.name.startsWith('.') && !isGenerated(path.relative(vault, abs))) dirs.push(abs);
         continue;
       }
       if (!entry.name.endsWith('.md') || NOT_PAGES_ANYWHERE.has(entry.name)) continue;
       if (dir === vault && NOT_PAGES_AT_ROOT.has(entry.name)) continue;
       const rel = path.relative(vault, abs).split(path.sep).join('/');
+      if (isGenerated(rel)) continue;
       try {
         if (entry.isSymbolicLink()) {
-          if (!isInside(vault, fs.realpathSync(abs)) || !fs.statSync(abs).isFile()) {
+          const real = fs.realpathSync.native(abs);
+          if (!isInside(vault, real) || isGenerated(path.relative(vault, real)) || !fs.statSync(abs).isFile()) {
             result.skipped.push(rel);
             continue;
           }
@@ -257,15 +365,45 @@ function selfSlugs(vault) {
 
 // ---------------------------------------------------------------- task lines
 
+// A task line: - [ ] @person what (due D) (added D) (done D) {mine|theirs} {doing}
+// The same as task_match in cortex.py. It reads the ends of the line by hand instead of one big
+// pattern, so a line of spaces cannot make it work for minutes.
+function matchTask(line) {
+  if (line.length > MAX_TASK_LINE) return null;
+  const head = TASK_HEAD_RE.exec(line);
+  if (!head) return null;
+  let rest = line.slice(head[0].length).trimEnd();
+  if (rest.includes('\n')) return null;
+  let doing = false;
+  if (rest.endsWith('{doing}')) {
+    const inner = rest.slice(0, -7).trimEnd();
+    if (inner.endsWith('{mine}') || inner.endsWith('{theirs}')) {
+      rest = inner;
+      doing = true;
+    }
+  }
+  const owner = rest.endsWith('{mine}') ? 'mine' : rest.endsWith('{theirs}') ? 'theirs' : '';
+  if (!owner) return null;
+  rest = rest.slice(0, -(owner.length + 2));
+  let end = rest.length;
+  for (;;) {
+    const trimmed = rest.slice(0, end).trimEnd();
+    const at = trimmed.lastIndexOf('(');
+    if (at === -1 || !ONE_META_RE.test(trimmed.slice(at))) break;
+    end = at;
+  }
+  return { done: head[1], person: head[2], text: rest.slice(0, end), meta: rest.slice(end), owner, doing };
+}
+
 function parseTask(line, me) {
-  const m = FOLLOWUP_RE.exec(line);
+  const m = matchTask(line);
   if (!m) return null;
   const dates = {};
-  for (const d of m.groups.meta.matchAll(META_RE)) dates[d[1]] = d[2];
+  for (const d of m.meta.matchAll(META_RE)) dates[d[1]] = d[2];
   return {
-    person: m.groups.person, text: m.groups.text.trim(), owner: m.groups.owner, closed: m.groups.done !== ' ',
-    due: dates.due || '', added: dates.added || '', done: dates.done || '', doing: Boolean(m.groups.doing),
-    todo: me.has(m.groups.person) && m.groups.owner === 'mine',
+    person: m.person, text: m.text.trim(), owner: m.owner, closed: m.done !== ' ',
+    due: dates.due || '', added: dates.added || '', done: dates.done || '', doing: m.doing,
+    todo: me.has(m.person) && m.owner === 'mine',
   };
 }
 
@@ -326,10 +464,14 @@ function inboxFiles(vault) {
 }
 
 const SECTIONS = ['Summary', 'Decisions', 'Follow-ups', 'Open questions'];
+const PROPOSAL_FIELD_RE = /^(source|status|name|saved): /;
+const PROPOSAL_NOTE = 'Waiting to be filed. Nothing here counts on the card or the board until it is accepted.';
 
 // A chat proposal, or null for any other note. It starts with plain 'source: chat' and
 // 'status: proposed' lines and no --- rule, so the kit's build treats it as a loose note: nothing in
-// it is validated or counted until cortex_accept files it.
+// it is validated or counted until cortex_accept files it. A person can edit it by hand, so text in
+// other places is kept too: `before` is what comes ahead of the first section, `others` the sections
+// with other names.
 function parseProposal(text) {
   const lines = text.split('\n');
   const first = lines.findIndex((l) => l.startsWith('## '));
@@ -339,18 +481,33 @@ function parseProposal(text) {
     const line = top.find((l) => l.startsWith(`${key}: `));
     return line ? line.slice(key.length + 2).trim() : '';
   };
+  const seen = new Set();
+  const before = top.filter((l) => {
+    const m = PROPOSAL_FIELD_RE.exec(l);
+    if (m && !seen.has(m[1])) {
+      seen.add(m[1]);
+      return false;
+    }
+    return l.trim() && l !== PROPOSAL_NOTE;
+  });
   const sections = Object.create(null);
   for (const name of SECTIONS) sections[name] = [];
+  const others = [];
   let current = null;
   for (const line of first === -1 ? [] : lines.slice(first)) {
-    const name = line.startsWith('## ') ? line.slice(3).trim() : null;
-    if (name !== null) current = sections[name] ? name : null;
-    else if (current && line.trim()) sections[current].push(line);
+    if (line.startsWith('## ')) {
+      const name = line.slice(3).trim();
+      current = sections[name] || { name, lines: [] };
+      if (!sections[name]) others.push(current);
+    } else if (current && line.trim()) {
+      (Array.isArray(current) ? current : current.lines).push(line);
+    }
   }
-  return { name: field('name'), saved: field('saved'), sections };
+  return { name: field('name'), saved: field('saved'), sections, before, others };
 }
 
 module.exports = {
-  UserError, GENERATED, MAX_FILE_BYTES, FOLLOWUP_RE, cmp, localDate, slugify, vaultLocation, requireVault, isInside,
-  readText, publicPage, walk, get, parseKit, selfSlugs, parseTask, followups, inboxFiles, parseProposal,
+  UserError, GENERATED, MAX_FILE_BYTES, PRIVATE_TAG, PROPOSAL_NOTE, cmp, localDate, slugify, plainLetters, plainSlug, neutralise, vaultLocation, vaultSource,
+  folderReason, configPointsNowhere, requireVault, isInside, isGenerated, readText, parseValue, publicPage, publicText, withoutPrivateSections,
+  walk, get, parseKit, selfSlugs, parseTask, followups, inboxFiles, parseProposal,
 };

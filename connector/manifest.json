@@ -3,7 +3,7 @@
   "name": "cortex-chat",
   "display_name": "Cortex",
   "version": "0.1.0",
-  "description": "Your Cortex in the Claude app's Chat tab: see your card, search and open your pages, save a chat and add to-dos. Everything stays in a folder on this computer.",
+  "description": "Your Cortex in the Claude app's Chat tab: see your card, search and open your pages, save a chat and add to-dos. Your pages stay in a folder on this computer.",
   "author": { "name": "Personal Cortex" },
   "license": "Apache-2.0",
   "server": {
@@ -33,7 +33,7 @@
     "cortex_folder": {
       "type": "directory",
       "title": "Cortex folder",
-      "description": "The folder that holds your Cortex. If you have no Cortex yet, leave this as it is and say \"set up my cortex\" in a chat.",
+      "description": "The folder that holds your Cortex. If you have no Cortex yet, leave this as it is and say \"set up my cortex\" in a chat. If ~/.cortex/config.json exists, that file decides the folder and this setting is ignored.",
       "required": false,
       "default": "${HOME}/cortex"
     }

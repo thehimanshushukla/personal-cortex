@@ -7,7 +7,7 @@ const { UserError } = require('./vault');
 const { listTools, callTool, isTool } = require('./tools');
 
 const MAX_LINE_CHARS = 1024 * 1024;
-const FALLBACK_PROTOCOL = '2025-06-18';
+const SUPPORTED_PROTOCOLS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05']; // newest first
 
 const send = (message) => process.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', ...message })}\n`);
 const fail = (id, code, message) => send({ id, error: { code, message } });
@@ -20,7 +20,7 @@ function toolResult(params) {
     if (e instanceof UserError) return plain(e.message, true);
     // Paths in a system error stay on this computer's logs, not in the chat.
     process.stderr.write(`cortex: ${params.name} failed: ${e && e.stack}\n`);
-    return plain('Something went wrong reading or writing your Cortex. Nothing else was changed. Try again, and if it repeats, check the folder is still there.', true);
+    return plain('Something went wrong reading your Cortex. Try again, and if it repeats, check the folder is still there.', true);
   }
 }
 
@@ -34,7 +34,7 @@ function handle(message) {
       return send({
         id,
         result: {
-          protocolVersion: params && typeof params.protocolVersion === 'string' ? params.protocolVersion : FALLBACK_PROTOCOL,
+          protocolVersion: params && SUPPORTED_PROTOCOLS.includes(params.protocolVersion) ? params.protocolVersion : SUPPORTED_PROTOCOLS[0],
           capabilities: { tools: {} },
           serverInfo: { name: manifest.name, version: manifest.version },
           instructions: "The person's Cortex: their working record in a folder on this computer. Call cortex_card before your first reply. Ask before saving anything.",

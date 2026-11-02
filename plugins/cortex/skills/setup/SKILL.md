@@ -7,6 +7,21 @@ description: Set up a new cortex from scratch with a guided, one-question-at-a-t
 
 The person starts with an empty cortex. You interview them level by level, explain each level, show the full plan, and build only when they say yes. They do not write code; you run every command for them.
 
+## If a cortex already exists (for example one made from the Chat tab)
+
+Check this first. Read `~/.cortex/config.json`. If it names a folder that has a `kit.yaml` in it, do not interview and do not build anything again. Never overwrite that folder or that file.
+
+Say: "You already have a cortex at <folder>, so I will not set up a new one." Then run `python3 ~/.cortex/engine/scripts/cortex.py doctor` and:
+
+- If the folder has no `.git`, offer backup only: "It is not backed up yet, so these pages exist only on this Mac. Back it up to a private GitHub repository?" (recommended yes). Ask for the repository name as in Step 4.
+- On yes, run Step 6 items 1, 5, 6 and 7, and commit what is already in the folder, naming the files. Set `github: yes` in `kit.yaml`. Then run `cortex.py build` and `cortex.py doctor` and show the result.
+- On no, stop there. Say they can ask again any time.
+- If the folder already has a `.git`, say what `doctor` found and fix only what it reports.
+
+If `config.json` names a folder that is not there, say so and ask whether to reconnect it or start again. Do not change the file without a yes.
+
+Only when there is no cortex, go on to the interview below.
+
 ## Open with why this exists (say this first, before any question)
 
 In three short sentences, in your own words:

@@ -1,7 +1,7 @@
 'use strict';
 // The start card, computed from the pages. Follows render_card in plugins/cortex/scripts/cortex.py.
 // The only differences are the hints that name things chat cannot do, listed in the tests' golden
-// comparison, the "and N more" lines, and a line counting pages it had to skip.
+// comparison, the "and N more" lines, the line naming the folder, and a line counting pages it had to skip.
 const path = require('path');
 const V = require('./vault');
 
@@ -30,7 +30,10 @@ function daysBetween(fromIso, toIso) {
 
 function clip(text, max) {
   const s = String(text);
-  return s.length > max ? `${s.slice(0, max - 3).trimEnd()}...` : s;
+  if (s.length <= max) return s;
+  const cut = s.slice(0, max - 3);
+  const last = cut.charCodeAt(cut.length - 1);
+  return `${(last >= 0xd800 && last <= 0xdbff ? cut.slice(0, -1) : cut).trimEnd()}...`; // never split a character in two
 }
 
 function more(list, shown) {
@@ -40,13 +43,14 @@ function more(list, shown) {
 function render(read, vault, limits) {
   const { pages, loose, skipped } = read;
   const now = V.localDate();
-  const kitName = V.parseKit(vault).name || '';
+  const kitName = [].concat(V.parseKit(vault).name || '').join(', '); // a name like [Rob] [Vale] reads as a list
   const me = V.selfSlugs(vault);
   const all = V.followups(pages, me);
   const say = (t) => clip(t, limits.clip);
-  const lines = [`# Cortex card${kitName ? ` - ${kitName}` : ''}`, '', `As of ${now}.`, ''];
+  const wide = (t) => clip(t, limits.clip * 3);
+  const lines = [`# Cortex card${kitName ? ` - ${say(kitName)}` : ''}`, '', `As of ${now}.`, wide(`Folder: ${vault} (${V.folderReason()})`), ''];
   const areas = pages.filter((p) => get(p, 'type') === 'area');
-  if (areas.length) lines.push(`Areas: ${areas.map((p) => get(p, 'area')).sort(cmp).join(', ')}`, '');
+  if (areas.length) lines.push(wide(`Areas: ${areas.map((p) => get(p, 'area')).sort(cmp).join(', ')}`), '');
   const things = pages.filter((p) => get(p, 'type') === 'thing' && get(p, 'status') === 'active');
   const sessions = pages.filter((p) => get(p, 'type') === 'session').sort(newestFirst((p) => get(p, 'updated')));
   const lastByThing = new Map();
@@ -63,14 +67,14 @@ function render(read, vault, limits) {
     const ranked = things.slice().sort(newestFirst(recency));
     lines.push('## Active', '');
     for (const t of ranked.slice(0, limits.active)) {
-      lines.push(`- **${get(t, 'title')}** (${get(t, 'area')}, last ${recency(t)}): ${say(get(t, 'summary'))}`);
+      lines.push(`- **${say(get(t, 'title'))}** (${say(get(t, 'area'))}, last ${recency(t)}): ${say(get(t, 'summary'))}`);
     }
     lines.push(...more(ranked, limits.active), '');
   }
   for (const [type, label, n] of [['decision', 'Latest decisions', limits.decisions], ['lesson', 'Lessons to remember', limits.lessons]]) {
     const group = pages.filter((p) => get(p, 'type') === type && get(p, 'status') === 'active').sort(newestFirst((p) => get(p, 'updated')));
     if (group.length) {
-      lines.push(`## ${label}`, '', ...group.slice(0, n).map((p) => `- ${get(p, 'title')} - ${say(get(p, 'summary'))}`), ...more(group, n), '');
+      lines.push(`## ${label}`, '', ...group.slice(0, n).map((p) => `- ${say(get(p, 'title'))} - ${say(get(p, 'summary'))}`), ...more(group, n), '');
     }
   }
   const soon = addDays(now, 7);
@@ -89,7 +93,7 @@ function render(read, vault, limits) {
     const urgent = items.filter((i) => i.due && i.due <= soon).sort(byDue);
     lines.push(`## Follow-ups (${items.length} open)`, '');
     for (const i of urgent.slice(0, limits.due)) {
-      lines.push(`- ${i.due}${i.due < now ? ' - OVERDUE' : ''}: ${i.owner === 'mine' ? 'I owe' : 'owed by'} @${i.person} - ${say(i.text)}`);
+      lines.push(`- ${i.due}${i.due < now ? ' - OVERDUE' : ''}: ${i.owner === 'mine' ? 'I owe' : 'owed by'} @${say(i.person)} - ${say(i.text)}`);
     }
     lines.push(...more(urgent, limits.due));
     if (!urgent.length) lines.push('- Nothing due in the next 7 days.');
@@ -116,14 +120,19 @@ function render(read, vault, limits) {
   return `${lines.join('\n')}\n`;
 }
 
-// From the same list lengths as the Python card down to very short ones.
+// From the same list lengths as the Python card down to very short ones. Every line is clipped, and
+// everything else goes before the due and overdue items do. The counts are in every tier.
 const TIERS = [
   { active: 8, decisions: 5, lessons: 3, due: 6, clip: Infinity },
   { active: 8, decisions: 5, lessons: 3, due: 6, clip: 120 },
-  { active: 5, decisions: 3, lessons: 2, due: 4, clip: 100 },
-  { active: 3, decisions: 2, lessons: 1, due: 3, clip: 80 },
-  { active: 2, decisions: 1, lessons: 1, due: 2, clip: 60 },
-  { active: 1, decisions: 1, lessons: 1, due: 1, clip: 40 },
+  { active: 5, decisions: 3, lessons: 2, due: 6, clip: 100 },
+  { active: 3, decisions: 2, lessons: 1, due: 6, clip: 80 },
+  { active: 2, decisions: 1, lessons: 1, due: 6, clip: 60 },
+  { active: 1, decisions: 1, lessons: 1, due: 6, clip: 40 },
+  { active: 0, decisions: 0, lessons: 0, due: 6, clip: 40 },
+  { active: 0, decisions: 0, lessons: 0, due: 4, clip: 30 },
+  { active: 0, decisions: 0, lessons: 0, due: 2, clip: 25 },
+  { active: 0, decisions: 0, lessons: 0, due: 1, clip: 20 },
 ];
 
 function card(vault, maxBytes) {
@@ -133,16 +142,7 @@ function card(vault, maxBytes) {
     text = render(read, vault, limits);
     if (Buffer.byteLength(text) <= maxBytes) return text;
   }
-  // Still too long (very long titles): cut at a line and say so.
-  const note = '(Card cut short. Ask to search for the rest.)\n';
-  const kept = [];
-  let size = Buffer.byteLength(note);
-  for (const line of text.split('\n')) {
-    size += Buffer.byteLength(line) + 1;
-    if (size > maxBytes) break;
-    kept.push(line);
-  }
-  return `${kept.join('\n')}\n${note}`;
+  return text;
 }
 
 module.exports = { card };

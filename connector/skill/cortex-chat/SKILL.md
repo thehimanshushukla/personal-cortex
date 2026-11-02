@@ -24,7 +24,7 @@ Call `cortex_card` and tell them what matters most right now. Do not read the wh
 
 Call `cortex_todo_add` with separate fields:
 - `what`: one short line, with no date in it
-- `person`: leave out for their own to-do; otherwise lowercase with hyphens, like `alex-rivera`
+- `person`: leave out for their own to-do; otherwise their real name, like Alex Rivera. A name in another script needs its Latin spelling; ask for it.
 - `due`: `YYYY-MM-DD`, only if they gave a date
 - `owner`: `mine` if they owe it, `theirs` if someone owes it to them
 
@@ -34,14 +34,15 @@ Call `cortex_inbox` and list what waits. Only items saved from chat can be filed
 
 ## "File that" / "accept that"
 
-Ask which area it belongs to, using the areas on the card. Ask about a project only if one clearly fits. Then call `cortex_accept`. Tell them where it went. Its follow-ups now count on the card and the board. If a new person page was made, say so.
+Ask which area it belongs to, using the areas on the card. Ask about a project only if one clearly fits. Then call `cortex_accept`. Tell them where it went. Its follow-ups now count on the card and the board. If a new person page was made, say so. If it fails, pass on what it says about what changed.
 
 ## "Set up my cortex"
 
-Only when the tools say no Cortex exists. Ask for their full name, then which parts of life to keep separate (like Personal and Work), then call `cortex_setup`. Pass on what it says about backup, in full.
+Only when the tools say no Cortex exists. Ask for their full name, then which parts of life to keep separate (like Personal and Work), then call `cortex_setup`. Area names need some Latin letters or numbers, because they become folder names. Pass on what it says about the folder and about backup, in full.
 
 ## Rules
 
 - Ask before every save. Saving is never automatic.
 - Nothing here edits or deletes a page. If they want a page changed, say that needs the Code tab or a text editor.
+- Parts marked private are not handed to you, and files Cortex generates cannot be opened here. Do not try to get round a refusal.
 - Plain words, short sentences, plain hyphens.
