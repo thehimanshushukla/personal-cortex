@@ -441,6 +441,13 @@ main { padding: 0 20px 40px; }
     if (lastFocus && document.body.contains(lastFocus)) lastFocus.focus();
   }
 
+  function dismiss(id) {
+    api("POST", "/api/dismiss", { id: id }).then(function (r) {
+      say(r.message || "Could not dismiss that.", r.status === 200 ? "note" : false);
+      load();
+    });
+  }
+
   function renderInbox() {
     var v = $("inbox-view"), ib = state.inbox;
     v.textContent = "";
@@ -452,7 +459,9 @@ main { padding: 0 20px 40px; }
       ["loose", "Loose notes", "Pages with no header. Tasks in them are not on the board until they get one.",
         function (r) { return r.title + (r.tasks ? " - " + r.tasks + " task line(s) not counted" : ""); }],
       ["unsaved", "Pages not saved yet", "Changed on this Mac but not yet saved to your backup. Say 'back up my cortex' in Claude.",
-        function (r) { return r.title + " (" + r.status + ")"; }]];
+        function (r) { return r.title + " (" + r.status + ")"; }],
+      ["missed", "Sessions never logged", "Work on this Mac that never reached your cortex. Ask Claude reads that session and proposes what to log. A plain Claude Chat cannot be seen here, so use 'save this chat' in the chat itself.",
+        function (r) { return r.date + " - " + r.folder + " - " + r.title; }]];
     var total = 0;
     groups.forEach(function (g) {
       var rows = ib[g[0]] || [];
@@ -460,7 +469,17 @@ main { padding: 0 20px 40px; }
       total += rows.length;
       if (!rows.length) return;
       var s = el("section", {}, [el("h2", { text: g[1] + " (" + rows.length + ")" }), el("p", { cls: "why", text: g[2] })]);
+      if (g[0] === "missed" && ib.missed_note) s.appendChild(el("p", { cls: "why", text: ib.missed_note }));
       rows.forEach(function (r) {
+        if (g[0] === "missed") {
+          s.appendChild(el("div", { cls: "row" }, [
+            el("div", { cls: "what" }, [el("span", { text: g[3](r) }), el("span", { cls: "path", text: r.users + " messages" })]),
+            el("div", { cls: "acts" }, [
+              el("button", { cls: "btn primary", text: "Ask Claude", onclick: function () { openThing(r.id, "claude"); } }),
+              el("button", { cls: "btn", text: "Copy prompt", onclick: function () { copy(r.prompt); } }),
+              el("button", { cls: "btn", text: "Dismiss", onclick: function () { dismiss(r.id); } })])]));
+          return;
+        }
         s.appendChild(el("div", { cls: "row" }, [
           el("div", { cls: "what" }, [el("span", { text: g[3](r) }), el("span", { cls: "path", text: r.rel })]),
           el("div", { cls: "acts" }, [
