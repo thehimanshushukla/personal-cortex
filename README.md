@@ -58,8 +58,10 @@ Cortex runs on your own Mac. Start your sessions in one of these, and it is ther
 
 It is not there in these:
 
-- **Claude on the web** (claude.ai in a browser, including Code on the web). Those sessions run on Anthropic's servers and cannot reach your Mac. A session you started on your Mac and continue from your phone or browser with Remote Control still runs on the Mac, so Cortex is there. In a web session you get no start card and no reminder to log, and if you ask for your board Claude may build a look-alike page that is not your cortex. Work done there does not reach your notes.
+- **Claude on the web** (claude.ai in a browser, including Code on the web). Those sessions run on Anthropic's servers and cannot reach your Mac. In a web session you get no start card and no reminder to log, and if you ask for your board Claude may build a look-alike page that is not your cortex. Work done there does not reach your notes.
 - **The Chat tab** of the desktop app, unless you add the optional [Chat tab extension](connector/README.md), which shows your card when you ask and saves a chat. There is no automatic start card or reminder to log there.
+
+**From a browser or your phone:** start the session on your Mac and continue it there with Remote Control. The session keeps running on the Mac, so Cortex is all there. In the Claude desktop app, switch on **Connect new sessions to Remote Control** under Settings > Code (in Claude Code, `/config` > **Enable Remote Control for all sessions**). Your sessions then show at claude.ai/code and in the Claude phone app under Code, with a computer icon and a green dot while the Mac is on. Open that session; a session started new in the browser runs on the web and has no Cortex. The Mac must be on with the app running, and both must be on the same account.
 
 A quick check: in a session with Cortex, Claude's first reply starts with your card, under "Your cortex". If it does not, Cortex is not in that session.
 
