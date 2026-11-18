@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.1
+Where Cortex runs, said plainly. To update: "Run claude plugin update cortex@personal-cortex for me", then in a new session "update my cortex".
+
+- Cortex runs on your own Mac: in the Claude desktop app's Code tab with a local session, in Claude Code in the terminal, or in Codex on your Mac. It works from any folder there. Claude on the web (claude.ai in a browser) runs on Anthropic's servers and cannot reach your Mac, so Cortex is not there: no start card, no reminder to log, no board.
+- Found from a real case: in a web session, "show my board" produced a look-alike page built on the spot. It did not update, and cards added to it never reached the cortex.
+- The instructions in your cortex folder (`AGENTS.md`) now tell Claude what to do in a session where Cortex is not installed: say so, say where to open it, and not build a substitute board or log pages there. This reaches a web session only when that session has your cortex folder from GitHub; a web session without it knows nothing about Cortex.
+- The README has a new section, "Where to start a session".
+
 ## 0.5.0
 The Gardener's first part and Cortex in the Chat tab. To update: "Run claude plugin update cortex@personal-cortex for me", then in a new session "update my cortex".
 

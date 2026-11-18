@@ -49,6 +49,20 @@ Your cortex keeps its instructions in `AGENTS.md`, which Codex, Cursor, Copilot 
 
 Then say **"set up my cortex"**. A guided setup asks how you want your world organised (personal, work, each organisation you work with), explains each level as it goes, and builds an empty cortex in exactly that shape, backed up to your own private GitHub. Nothing is loaded that you did not choose. When it finishes, it walks you through everything you now have.
 
+### Where to start a session
+
+Cortex runs on your own Mac. Start your sessions in one of these, and it is there by itself, in any folder:
+
+- **The Claude desktop app, Code tab** (the **</>** icon at the top of the left sidebar), with a local session on your Mac, not a cloud environment. Claude Code needs a paid plan, so sign the app in with the account that has it.
+- **Claude Code in the terminal** (`claude`), or Codex on your Mac (the app or `codex` in the terminal).
+
+It is not there in these:
+
+- **Claude on the web** (claude.ai in a browser, including Code on the web). Those sessions run on Anthropic's servers and cannot reach your Mac. A session you started on your Mac and continue from your phone or browser with Remote Control still runs on the Mac, so Cortex is there. In a web session you get no start card and no reminder to log, and if you ask for your board Claude may build a look-alike page that is not your cortex. Work done there does not reach your notes.
+- **The Chat tab** of the desktop app, unless you add the optional [Chat tab extension](connector/README.md), which shows your card when you ask and saves a chat. There is no automatic start card or reminder to log there.
+
+A quick check: in a session with Cortex, Claude's first reply starts with your card, under "Your cortex". If it does not, Cortex is not in that session.
+
 **Every piece exists because something went wrong first.** From a year of daily use:
 
 | Piece | What it does | What went wrong before it existed |
